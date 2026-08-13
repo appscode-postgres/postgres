@@ -66,6 +66,12 @@ ENV PG_PRODUCT_NAME="Postgres Enterprise by AppsCode"
 
 ENV DOCKER_PG_LLVM_DEPS="llvm21-dev clang21"
 
+# credcheck: credential policy enforcement (Bangladesh Bank ICT Security 8.2 /
+# 5.9, Cybersecurity Framework 4.1.2).  Pinned to the commit behind tag v5.0
+# rather than the tag itself, since a tag can be moved.
+ENV CREDCHECK_VERSION=v5.0
+ENV CREDCHECK_COMMIT=9a101e8e8de2ea3b7e1dfabed6568891e194acaf
+
 # Source tarball produced by build.sh via "git archive" of the appscode/18
 # branch.  Extracted rather than downloaded so the image is built from this
 # fork; there is no upstream tarball to checksum.
@@ -89,6 +95,8 @@ RUN set -eux; \
 		flex \
 		g++ \
 		gcc \
+# to fetch credcheck at a pinned commit
+		git \
 		krb5-dev \
 		libc-dev \
 		libedit-dev \
@@ -172,6 +180,21 @@ RUN set -eux; \
 	make install-world-bin; \
 	make -C contrib install; \
 	\
+# credcheck, built with PGXS against the Postgres just installed above.  Done
+# inside this same RUN so it can use .build-deps, and before the scanelf sweep
+# below so credcheck.so's shared-library needs are captured in runDeps.
+#
+# The optional cracklib dictionary check stays disabled (its CPPFLAGS/SHLIB_LINK
+# are commented out upstream); enabling it would require provisioning cracklib
+# and a dictionary in this image.
+	git clone --no-checkout https://github.com/HexaCluster/credcheck.git /usr/src/credcheck; \
+	git -C /usr/src/credcheck checkout --quiet "$CREDCHECK_COMMIT"; \
+	git -C /usr/src/credcheck describe --tags --exact-match | grep -Fx "$CREDCHECK_VERSION"; \
+	make -C /usr/src/credcheck -j "$(nproc)" USE_PGXS=1 PG_CONFIG=/usr/local/bin/pg_config; \
+	make -C /usr/src/credcheck USE_PGXS=1 PG_CONFIG=/usr/local/bin/pg_config install; \
+	test -f /usr/local/lib/postgresql/credcheck.so; \
+	test -f /usr/local/share/postgresql/extension/credcheck.control; \
+	\
 	runDeps="$( \
 		scanelf --needed --nobanner --format '%n#p' --recursive /usr/local \
 			| tr ',' '\n' \
@@ -195,6 +218,7 @@ RUN set -eux; \
 	cd /; \
 	rm -rf \
 		/usr/src/postgresql \
+		/usr/src/credcheck \
 		/usr/local/share/doc \
 		/usr/local/share/man \
 	; \
@@ -211,6 +235,27 @@ RUN set -eux; \
 	cp -v /usr/local/share/postgresql/postgresql.conf.sample /usr/local/share/postgresql/postgresql.conf.sample.orig; \
 	sed -ri "s!^#?(listen_addresses)\s*=\s*\S+.*!\1 = '*'!" /usr/local/share/postgresql/postgresql.conf.sample; \
 	grep -F "listen_addresses = '*'" /usr/local/share/postgresql/postgresql.conf.sample
+
+# Credential policy, applied to every cluster initdb'd from this image.
+#
+# It goes in an include_dir rather than straight into postgresql.conf.sample so
+# a deployment can override individual settings by mounting a later-sorting
+# file into /etc/postgresql/conf.d without editing anything shipped here.
+#
+# NOTE: initdb copies the sample into a NEW data directory, so this reaches new
+# clusters only.  A pre-existing PGDATA carried over from an older image keeps
+# its own postgresql.conf and will NOT gain the include line or the policy; add
+# the include there by hand when upgrading such a volume in place.
+COPY conf.d/ /etc/postgresql/conf.d/
+RUN set -eux; \
+	printf '\n# AppsCode: credential policy, see /etc/postgresql/conf.d\ninclude_dir = %s\n' \
+		"'/etc/postgresql/conf.d'" \
+		>> /usr/local/share/postgresql/postgresql.conf.sample; \
+	grep -F "include_dir = '/etc/postgresql/conf.d'" /usr/local/share/postgresql/postgresql.conf.sample; \
+	test -f /etc/postgresql/conf.d/10-bb-ict-security.conf
+
+# CREATE EXTENSION credcheck on first initialisation, for the admin views.
+COPY initdb.d/ /docker-entrypoint-initdb.d/
 
 RUN install --verbose --directory --owner postgres --group postgres --mode 3777 /var/run/postgresql
 

@@ -29,6 +29,8 @@ ctx="$(mktemp -d)"
 trap 'rm -rf "$ctx"' EXIT
 
 cp docker/Dockerfile docker/docker-entrypoint.sh docker/docker-ensure-initdb.sh "$ctx/"
+cp -r docker/conf.d docker/initdb.d "$ctx/"
+chmod +x "$ctx"/initdb.d/*.sh
 
 echo "==> archiving $REF ($(git rev-parse --short "$REF"))"
 git archive --format=tar.gz --output="$ctx/postgresql-src.tar.gz" "$REF"

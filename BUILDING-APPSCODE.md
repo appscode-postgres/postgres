@@ -153,6 +153,81 @@ silently un-rebranded build fails the build rather than shipping.
 The image tag is separate from the in-binary version string and may carry
 extra qualifiers; the binary always reports exactly `18.6`.
 
+### Credential policy (credcheck)
+
+The image bundles [credcheck](https://github.com/HexaCluster/credcheck) **v5.0**
+(pinned to commit `9a101e8`) and ships a default policy for Bangladesh Bank
+ICT Security 8.2 / 5.9 and Cybersecurity Framework 4.1.2.
+
+- Policy file: `/etc/postgresql/conf.d/10-bb-ict-security.conf`
+- Wired in by `include_dir = '/etc/postgresql/conf.d'`, appended to
+  `postgresql.conf.sample`, so every cluster `initdb`'d from this image gets it
+- `CREATE EXTENSION credcheck` runs on first init in `template1` and `postgres`
+  (`/docker-entrypoint-initdb.d/00-credcheck.sh`) for the admin views
+- Override by mounting a later-sorting file (e.g. `20-local-overrides.conf`)
+  into `/etc/postgresql/conf.d`; last value wins. Do not edit the shipped file.
+
+`docker/smoke-test.sh` asserts every GUC is live and that each rule actually
+rejects, so an inert policy fails CI rather than shipping.
+
+#### Four things to know before deploying
+
+**1. `POSTGRES_PASSWORD` must satisfy the policy.** `initdb` sets the superuser
+password with an internal `ALTER USER ... PASSWORD`, and credcheck is already
+loaded at that point. A weak value aborts startup:
+
+```
+FATAL:  password length should match the configured credcheck.password_min_length (11)
+```
+
+This is deliberate — the superuser password must meet policy too — but it is a
+breaking change for deployments whose `POSTGRES_PASSWORD` worked on a stock
+`postgres` image.
+
+**2. The lockout does not apply to loopback connections.** `initdb` writes
+`trust` rules for `127.0.0.1/32` and `::1/128`, and the entrypoint *appends*
+`host all all all scram-sha-256` after them. `pg_hba` is first-match-wins, so
+loopback authenticates with no password and can neither trigger nor be blocked
+by `max_auth_failure`. Verified: five bad passwords over loopback record zero
+failures; over a real network path the fifth is `rejecting connection, user
+'app1' has been banned`. Anything reachable on the pod network is covered;
+sidecars and `docker exec`/`kubectl exec` sessions on loopback are not. Set
+`POSTGRES_HOST_AUTH_METHOD` or supply your own `pg_hba.conf` if loopback must
+be authenticated too.
+
+**3. Existing data directories do not pick the policy up.** `initdb` copies the
+sample into a *new* PGDATA only. A volume carried over from an older image
+keeps its own `postgresql.conf` with no `include_dir` line — add it by hand
+when upgrading such a volume in place, or the cluster runs unprotected.
+
+**4. `reset_superuser = off` means the superuser can be locked out.** An
+operator or health check retrying a stale password will brick admin access
+until someone runs `SELECT pg_banned_role_reset('<role>')` from an unbanned
+session. Loopback being `trust` (point 2) is the practical escape hatch today;
+do not rely on that if you change the `pg_hba` rules.
+
+#### Deviations from a naive reading of the BB controls
+
+| Control | What was configured, and why |
+| --- | --- |
+| 8.2.7 classes | credcheck has no "N of M" rule; all four classes are required, a compliant superset of "at least 3 of 4" |
+| 8.2.7 superuser floor | **Not achievable.** credcheck v5.0's README documents `password_min_length_su`, but the v5.0 source implements no `_su` GUC at all — Postgres logs `invalid configuration parameter name ... removing it` and drops it. `superuser_nocheck = off` at least holds superusers to the same floor |
+| 8.2.8 expiry | `password_valid_until` is a **minimum** (and the auto-applied value), not just a default. Both bounds at 90 means an explicit `VALID UNTIL` must be ~exactly 90 days: a stricter 30-day expiry is *rejected*. Auto-applied expiry lands at 91 calendar days after rounding up to midnight |
+| 5.9.1 username-in-password | **`password_ignore_case` is off, not on.** v5.0 skips the upper/lower class checks entirely when it is set (`if (!password_ignore_case && ...)`), which would cut 8.2.7 from four classes to two and fail "at least 3 of 4". Residual gap: matching is case-**sensitive**, so role `t1` rejects `Containst1!xyz` but accepts `ContainsT1!xyz` |
+
+#### Residual risks
+
+- credcheck only validates **plaintext** submissions. Restoring a dump or
+  migrating already-hashed passwords bypasses every rule above.
+- `encrypted_password_allowed` is off by design, so `CREATE/ALTER ROLE ...
+  PASSWORD` sends plaintext over the wire. Any connection that sets a password
+  must use `sslmode=require` or stronger.
+- `$PGDATA/pg_password_history` must be in backups (`pg_basebackup` covers it)
+  or reuse history is lost on restore.
+- credcheck implements **no** MFA or credential-custody control. BB clauses
+  8.2.2, 8.2.10, 4.1.2.12, 4.5.2.7 and 5.9.5 are **not** satisfied by this
+  extension and need a separate identity provider / secrets manager.
+
 **Migration note:** upstream changed `PGDATA` in 18 to
 `/var/lib/postgresql/18/docker` and moved the `VOLUME` from
 `/var/lib/postgresql/data` to `/var/lib/postgresql`. That is an upstream 18
