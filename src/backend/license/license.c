@@ -454,6 +454,25 @@ LicenseVerifyAtStartup(LicenseInfo *out, const char *context)
 	LicenseResolvePath(path, sizeof(path));
 	warn_on_license_permissions(path);
 
+	/*
+	 * Refuse to run against an OpenSSL major or minor version other than the
+	 * one this binary was built against. See license_openssl_is_expected() for
+	 * why this is the enforced check and a path based one is not.
+	 */
+	if (!license_openssl_is_expected(errbuf, sizeof(errbuf)))
+		ereport(FATAL,
+				(errcode(ERRCODE_CONFIG_FILE_ERROR),
+				 errmsg("refusing to verify the license against an unexpected OpenSSL"),
+				 errdetail("%s", errbuf)));
+
+	{
+		char		origin[MAXPGPATH];
+
+		(void) license_openssl_origin(origin, sizeof(origin));
+		elog(DEBUG1, "license verification is using OpenSSL from \"%s\"",
+			 origin);
+	}
+
 	status = LicenseVerifyNow(out, errbuf, sizeof(errbuf));
 	if (status != LICENSE_OK)
 		license_report_failure(out, path, errbuf);

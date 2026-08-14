@@ -23,6 +23,11 @@
  *
  *-------------------------------------------------------------------------
  */
+#if defined(__linux__) || defined(__GLIBC__)
+#define HAVE_DLADDR 1
+#include <dlfcn.h>
+#endif
+
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
@@ -75,6 +80,64 @@ set_err(char *errbuf, size_t errlen, const char *fmt,...)
 	va_start(ap, fmt);
 	vsnprintf(errbuf, errlen, fmt, ap);
 	va_end(ap);
+}
+
+/*
+ * Verify that the OpenSSL we are calling is the one we were built against.
+ *
+ * This is the weaker half of the anti-bypass measures. It catches a libcrypto
+ * that has been swapped for a different version underneath us, which is the
+ * accidental or lazy case. It does NOT stop LD_PRELOAD interposition, and no
+ * check written in this process can, because the interposed library is
+ * answering the very questions we would ask. That is stated in section 1 of
+ * the design document as out of scope rather than papered over here.
+ *
+ * Only the major and minor version are compared. Patch level differences are
+ * routine and expected on a distribution that updates OpenSSL in place.
+ *
+ * Refusing based on the resolved library PATH was considered and deliberately
+ * not implemented: there is no portable notion of an expected location, and a
+ * check that fires on Debian but not on Alpine would cost more in false
+ * refusals than it buys. The path is recorded in the caller's diagnostics
+ * instead, so a support bundle shows where the symbols actually came from.
+ */
+bool
+license_openssl_is_expected(char *errbuf, size_t errlen)
+{
+	unsigned long built = OPENSSL_VERSION_NUMBER;
+	unsigned long running = OpenSSL_version_num();
+
+	/* Bits 28..20 are major, bits 19..12 are minor. */
+	if ((built >> 20) != (running >> 20))
+	{
+		set_err(errbuf, errlen,
+				"built against OpenSSL 0x%08lx but running against 0x%08lx",
+				built, running);
+		return false;
+	}
+	return true;
+}
+
+/*
+ * Where did the OpenSSL symbols actually resolve from?
+ *
+ * Diagnostic only, never a refusal. Returns false if the platform cannot
+ * answer, which is not an error.
+ */
+bool
+license_openssl_origin(char *buf, size_t buflen)
+{
+#ifdef HAVE_DLADDR
+	Dl_info		info;
+
+	if (dladdr((const void *) EVP_sha256, &info) != 0 && info.dli_fname != NULL)
+	{
+		snprintf(buf, buflen, "%s", info.dli_fname);
+		return true;
+	}
+#endif
+	snprintf(buf, buflen, "unknown");
+	return false;
 }
 
 const char *

@@ -487,10 +487,21 @@ value is stored directly rather than hashed; an operator can compare it against
 
 ## 10. Anti-bypass measures and their limits
 
-- Prefer static linking of libcrypto for the license path. Failing that, verify
-  the OpenSSL version and refuse to run if resolved symbols come from an
-  unexpected location.
-- `LD_PRELOAD` interposition remains possible and is out of scope.
+- The OpenSSL major and minor version is verified at startup: if the running
+  libcrypto differs from the one this binary was built against, the server
+  refuses to start. Patch level differences are accepted, since a distribution
+  updating OpenSSL in place is routine.
+- Refusing based on the resolved library **path** was considered and
+  deliberately not implemented. There is no portable notion of an expected
+  location, and a check that fires on one distribution but not another costs
+  more in false refusals than it buys. The resolved path is recorded at
+  `DEBUG1` instead, so a support bundle shows where the symbols came from.
+- Static linking of libcrypto for the license path alone is not practical,
+  because the server links OpenSSL globally for TLS. The version check above is
+  the "at minimum" fallback.
+- `LD_PRELOAD` interposition remains possible and is out of scope. No check
+  written in this process can detect it, because the interposed library is
+  answering the very questions the check would ask.
 - The verification routine returns a populated struct consumed at several call
   sites rather than setting a single `bool license_ok`, so a one instruction
   patch does not fully disable enforcement.
@@ -554,12 +565,31 @@ and the UUID is the only way to get from a log line back to a customer.
 ## 12. Reading license state from a running cluster
 
 `CREATE EXTENSION appscode_license` provides `appscode_license_info()`,
-returning UUID, licensee, org, cluster ID, product, version constraint,
-`not_before`, `not_after`, days remaining, and the leaf fingerprint.
+returning UUID, licensee, org, product, version constraint, cluster ID, whether
+the license is unbound, `not_before`, `not_after`, days remaining, and the leaf
+fingerprint.
 
-This extension is a read only reporting shim over state the postmaster already
-verified. It cannot influence whether the server starts, and removing it does
-not disable enforcement.
+```
+=# SELECT uuid, licensee, not_after, days_remaining FROM appscode_license_info();
+                 uuid                 |     licensee     |       not_after        | days_remaining
+--------------------------------------+------------------+------------------------+----------------
+ 1a5e9f18-8851-4f65-a48e-31b49f820bc4 | ACME Corporation | 2027-08-14 20:51:01+06 |            365
+```
+
+The function re-verifies the license on each call rather than reading a cached
+copy. That has two consequences worth knowing. It keeps the extension free of
+shared memory, so reporting adds nothing to the core startup path and the
+upstream diff for this feature is zero. And it reports the license file as it
+is now rather than as it was at startup, which is the more useful answer after
+a renewal.
+
+If the license is not currently valid the function raises an error carrying the
+reason, rather than returning a row of nulls. The background worker is about to
+shut the cluster down in that case anyway, and the reason is the useful part.
+
+This extension is a read only reporting shim. It cannot influence whether the
+server starts, and dropping it does not disable enforcement, which is asserted
+by the test suite.
 
 ## 13. Runtime expiry
 
@@ -641,8 +671,25 @@ path, not a network lookup.
 - A release build embeds only the AppsCode production CA.
 - A `--dev-ca` build embeds the dev CA **instead of**, never in addition to,
   the production CA.
-- A CI gate inspects the shipped binary and fails if the dev CA fingerprint
-  appears in it.
+- `scripts/ci-check-release-binary.sh <binary>` gates a release artifact. It
+  inspects the shipped binary rather than trusting the build recipe, which is
+  the point: a misconfigured build, or a stale object file in a reused build
+  tree, produces exactly the artifact this catches. Three checks:
+
+  1. the development CA marker must be absent
+  2. the production CA DER bytes must be present
+  3. the pinned digest in `ca_pin.c` must match the committed PEM
+
+  A development build carries a fixed marker string,
+  `APPSCODE-LICENSE-DEV-CA-BUILD-DO-NOT-SHIP`, emitted only when
+  `LICENSE_DEV_CA` is defined. Searching for a dev CA fingerprint would not
+  work, because each developer generates their own CA and there is no fixed
+  value to look for.
+
+- `scripts/ci-check-ca-current.sh` fetches the published CA and compares it with
+  the committed copy. It reports; it never feeds the build. Exit 1 means the CA
+  changed and a rotation is probably underway; exit 2 means the check could not
+  run, so a network outage is not mistaken for a rotation.
 - The production CA private key never lives in the repository. It stays with
   the existing `licenses.appscode.com` signing service.
 

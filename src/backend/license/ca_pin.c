@@ -42,6 +42,23 @@
  */
 #include "dev_ca_pin.h"
 
+/*
+ * A grep-able marker so CI can tell a development build from a release build
+ * by inspecting the shipped binary, rather than by trusting the build recipe.
+ *
+ * Comparing fingerprints alone would not be enough: a dev CA is generated
+ * fresh by whoever runs the tests, so CI has no fixed value to search for.
+ * This string is fixed, and it only exists when LICENSE_DEV_CA is defined.
+ *
+ * Deliberately not static, and referenced through a volatile pointer below, so
+ * the compiler cannot discard it as unused.
+ */
+const char appscode_license_dev_ca_marker[] =
+	"APPSCODE-LICENSE-DEV-CA-BUILD-DO-NOT-SHIP";
+
+const char *volatile appscode_license_dev_ca_marker_ref =
+	appscode_license_dev_ca_marker;
+
 #else
 
 /*

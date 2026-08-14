@@ -227,6 +227,53 @@ chmod 0644, $licpath;
 }
 
 #
+# The reporting extension.
+#
+# It must agree with the startup log line, since a support engineer is expected
+# to be able to use either. It must also not be load bearing: dropping it
+# changes nothing about enforcement.
+#
+issue('--cluster', $CLUSTER);
+{
+	# Read only the portion this start appends. The log file accumulates
+	# across every case in this file, so matching from the beginning would
+	# pick up an earlier license.
+	my $logstart = -s $node->logfile;
+	$node->start;
+
+	my $log = PostgreSQL::Test::Utils::slurp_file($node->logfile, $logstart);
+	my ($logged) = $log =~ /license ([0-9a-f-]{36}) verified/;
+
+	$node->safe_psql('postgres', 'CREATE EXTENSION appscode_license');
+
+	my $reported = $node->safe_psql('postgres',
+		'SELECT uuid FROM appscode_license_info()');
+	is($reported, $logged,
+		'appscode_license_info() reports the UUID from the startup log');
+
+	my $row = $node->safe_psql('postgres',
+		q{SELECT product || '|' || version_constraint || '|' || cluster_id
+		  FROM appscode_license_info()});
+	is($row, "postgres-enterprise|>=15,<19|$CLUSTER",
+		'appscode_license_info() reports the certificate fields');
+
+	is($node->safe_psql('postgres',
+			'SELECT length(leaf_fingerprint) FROM appscode_license_info()'),
+		'64', 'appscode_license_info() reports a sha256 leaf fingerprint');
+
+	is($node->safe_psql('postgres',
+			'SELECT not_after > now() FROM appscode_license_info()'),
+		't', 'appscode_license_info() reports a future expiry');
+
+	# Dropping the extension must not affect enforcement.
+	$node->safe_psql('postgres', 'DROP EXTENSION appscode_license');
+	$node->restart;
+	ok(server_up($node),
+		'server still starts after the reporting extension is dropped');
+	$node->stop;
+}
+
+#
 # Single user mode is covered too, since it can run arbitrary SQL.
 #
 issue('--cluster', $CLUSTER, '--expired');

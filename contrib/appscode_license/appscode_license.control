@@ -1,0 +1,5 @@
+# appscode_license extension
+comment = 'read-only view of the verified AppsCode license'
+default_version = '1.0'
+module_pathname = '$libdir/appscode_license'
+relocatable = true

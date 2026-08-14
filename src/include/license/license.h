@@ -116,6 +116,15 @@ extern LicenseStatus license_verify_buffer(const unsigned char *pem,
 										   LicenseInfo *out,
 										   char *errbuf, size_t errlen);
 
+/*
+ * Is the OpenSSL we are calling the one we were built against? See the comment
+ * on the implementation for what this does and does not establish.
+ */
+extern bool license_openssl_is_expected(char *errbuf, size_t errlen);
+
+/* Diagnostic: where the OpenSSL symbols resolved from. Never a refusal. */
+extern bool license_openssl_origin(char *buf, size_t buflen);
+
 /* Stable short name for a status, for logs and tests. */
 extern const char *license_status_name(LicenseStatus status);
 
