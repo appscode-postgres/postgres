@@ -64,6 +64,9 @@ option('extra_lib_dirs', type: 'array', value: [],
 option('extra_version', type: 'string', value: '',
   description: 'Append STRING to the PostgreSQL version number')
 
+option('license_dev_ca', type: 'string', value: '',
+  description: 'Path to a development license CA to embed INSTEAD OF the production AppsCode CA. Test builds only; a release build must leave this empty')
+
 option('darwin_sysroot', type: 'string', value: '',
   description: 'Select a non-default sysroot path')
 

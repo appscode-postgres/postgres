@@ -646,6 +646,68 @@ path, not a network lookup.
 - The production CA private key never lives in the repository. It stays with
   the existing `licenses.appscode.com` signing service.
 
+## 16b. Test suites
+
+Two suites, at different levels.
+
+### Standalone verification harness
+
+`src/backend/license/test/run_tests.sh` builds `license_core.c` against a
+freshly generated development CA with no PostgreSQL runtime at all, and runs 21
+cases under ASan and UBSan. This is the first thing to run after changing
+verification logic, since it exercises every error path and every OpenSSL
+object is freed on each of them.
+
+```
+src/backend/license/test/run_tests.sh [WORKDIR]
+```
+
+### TAP suite
+
+`src/test/modules/license/` covers the server: 39 startup cases, 10 runtime
+cases, and 16 state file cases.
+
+These tests need a server built with a development CA embedded **instead of**
+the production CA, because no license they can issue would ever chain to the
+production root. Without one they skip, rather than reporting confusing chain
+failures.
+
+make:
+
+```
+make -C src/backend/license clean
+make -C src/backend/license LICENSE_DEV_CA_PEM=/path/to/dev-ca/ca.crt
+make && make install
+PG_LICENSE_DEV_CA=/path/to/dev-ca make -C src/test/modules/license check
+```
+
+meson, where the suite derives the CA directory from the configure option and
+needs no environment variable:
+
+```
+meson setup build -Dtap_tests=enabled -Dlicense_dev_ca=/path/to/dev-ca/ca.crt
+meson test -C build --suite license
+```
+
+The CA directory must still contain `ca.key`, since the tests issue their own
+licenses through `scripts/make-license.sh`.
+
+A release build must never set either option. The CI gate in section 16
+inspects the shipped binary and fails if a development CA fingerprint appears.
+
+`002_runtime.pl` takes several minutes: the re-check interval is 60 seconds and
+is deliberately not configurable, so expiry and renewal have to be observed in
+real time.
+
+### Testing the clock without touching the clock
+
+`003_state.pl` never moves the system clock. It rewrites the state file with a
+high water mark in the future, which is indistinguishable from the server's
+point of view and needs neither `libfaketime` nor root. Forging an authentic
+state file from the test is possible because the HMAC key derives from the
+embedded CA public key digest alone, which is exactly the limitation section 8
+records rather than hides.
+
 ## 17. File permission policy
 
 Approved 2026-08-14. The policy is deliberately asymmetric between the two

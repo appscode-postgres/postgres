@@ -83,6 +83,11 @@ endif
 ###############################################################
 
 postgres_inc_d = ['src/include']
+# The license trust anchor header is generated into the build tree beside its
+# source. A relative entry here puts both the source and the build directory on
+# the include path, which is what lets license_core.c find appscode_root_ca.h
+# when it is compiled as part of postgres_lib rather than in its own directory.
+postgres_inc_d += 'src/backend/license'
 postgres_inc_d += get_option('extra_include_dirs')
 
 postgres_lib_d = get_option('extra_lib_dirs')

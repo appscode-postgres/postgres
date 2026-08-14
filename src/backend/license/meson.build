@@ -53,7 +53,6 @@ if license_dev_ca != ''
     output: 'dev_ca_pin.h',
     command: [
       perl, files('generate_ca_header.pl'),
-      '--output', '@PRIVATE_DIR@/discard.h',
       '--pin-output', '@OUTPUT@',
       '@INPUT@',
     ],

@@ -13,7 +13,10 @@
 # accepts both the outgoing and the incoming root during the transition.
 #
 # Usage:
-#	  generate_ca_header.pl --output out.h input.pem [input2.pem ...]
+#	  generate_ca_header.pl [--output out.h] [--pin-output pin.h] \
+#	      input.pem [input2.pem ...]
+#
+# --output may be omitted when only the pin header is wanted.
 #
 # Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
 #
@@ -46,8 +49,11 @@ while (my $arg = shift @ARGV)
 	}
 }
 
-die "usage: generate_ca_header.pl --output out.h [--pin-output pin.h] input.pem [...]\n"
-  unless defined $output && @inputs;
+# --output may be omitted when only the pin header is wanted, which is how the
+# meson build generates dev_ca_pin.h without also writing a header it would
+# discard.
+die "usage: generate_ca_header.pl [--output out.h] [--pin-output pin.h] input.pem [...]\n"
+  unless (defined $output || defined $pin_output) && @inputs;
 
 # Decode every CERTIFICATE block in a PEM file to DER.
 sub pem_to_der
@@ -78,9 +84,11 @@ foreach my $in (@inputs)
 	}
 }
 
-open my $out, '>', $output or die "could not write $output: $!\n";
+if (defined $output)
+{
+	open my $out, '>', $output or die "could not write $output: $!\n";
 
-print $out <<"EOH";
+	print $out <<"EOH";
 /*-------------------------------------------------------------------------
  *
  * appscode_root_ca.h
@@ -143,6 +151,7 @@ close $out;
 
 printf STDERR "generate_ca_header.pl: wrote %s with %d trust anchor(s)\n",
   $output, $n;
+}
 
 #
 # Optional SPKI pin header, for dev CA builds only.
