@@ -682,19 +682,46 @@ mounts, but we can and should be strict about the one we write ourselves.
 - Primary: early in `PostmasterMain()`, after GUC processing and after the data
   directory is known, before any listen socket is created and before any child
   is forked.
-- Single user mode (`postgres --single`) is covered. It can execute arbitrary
-  SQL against an existing cluster, so exempting it would be a bypass.
+- Single user mode (`postgres --single`) is covered, with one narrow exception
+  described below. It can execute arbitrary SQL against an existing cluster, so
+  exempting it outright would be a bypass.
 - Bootstrap mode (`postgres --boot`) is **exempt**, deliberately.
 
-Rationale for the bootstrap exemption: `initdb` runs bootstrap mode to create
-the data directory, which necessarily happens before any license can be placed
-in `$PGDATA`. Enforcing there would make it impossible to initialize a cluster.
-Bootstrap mode cannot serve clients, opens no sockets, runs only the bootstrap
+### 18.1 The cluster creation exemption
+
+`initdb` runs the backend twice, and only the first run is bootstrap mode:
+
+1. `postgres --boot ...` writes the initial catalog.
+2. `postgres --single -F -O -j ...` performs post bootstrap initialization
+   (`backend_options` in `src/bin/initdb/initdb.c`).
+
+Both happen while the data directory is still being built, before any license
+could have been placed in it, so both must be exempt. Exempting only `--boot`
+is not sufficient and makes `initdb` fail outright, which is how this was
+found.
+
+The discriminator for the second case is `allow_system_table_mods`. `initdb`
+always passes `-O`, and that option exists for `initdb` and developers rather
+than for normal administration.
+
+Stated honestly: this means `postgres --single -O` skips the license check.
+Doing so already requires write access to `$PGDATA` as the postgres user, which
+is exactly the access single user mode requires in the first place, so the
+marginal exposure is small. It is not zero: an installation whose binary is
+root owned and read only, but whose data directory is writable, gains a bypass
+it would not otherwise have. Closing that would require a signal that
+distinguishes `initdb` from an administrator more reliably than a command line
+flag, and no such signal exists today.
+
+### 18.2 Why bootstrap mode cannot be reached by a server start
+
+Bootstrap mode opens no sockets, serves no clients, runs only the bootstrap
 parser rather than the normal SQL grammar, and exits when initialization
 completes. The exemption is keyed on the bootstrap mode flag, reachable only by
 passing `--boot` explicitly; the postmaster never sets it on a normal server
-start, so the exemption cannot be reached by starting a server. A cluster
-created without a license still cannot be started without one.
+start. A cluster created without a license still cannot be started without
+one, which was verified end to end: `initdb` succeeds with no license present,
+and both `pg_ctl start` and `postgres --single` then refuse.
 
 ## 19. Support runbook: tracing a UUID
 

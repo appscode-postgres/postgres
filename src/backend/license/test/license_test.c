@@ -28,7 +28,7 @@
 #include <string.h>
 #include <time.h>
 
-#include "license.h"
+#include "license/license.h"
 
 int
 main(int argc, char **argv)

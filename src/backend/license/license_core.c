@@ -40,7 +40,7 @@
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
-#include "license.h"
+#include "license/license.h"
 #include "appscode_root_ca.h"
 
 /*
@@ -57,6 +57,14 @@
 
 #define SECS_PER_DAY			86400
 
+/*
+ * The format attribute is spelled out rather than using PostgreSQL's
+ * pg_attribute_printf, because this file is deliberately free of PostgreSQL
+ * headers so it can be linked into the standalone test harness.
+ */
+#if defined(__GNUC__)
+__attribute__((format(printf, 3, 4)))
+#endif
 static void
 set_err(char *errbuf, size_t errlen, const char *fmt,...)
 {

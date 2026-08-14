@@ -42,6 +42,7 @@
 #include "jit/jit.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
+#include "license/license.h"
 #include "libpq/pqsignal.h"
 #include "mb/pg_wchar.h"
 #include "mb/stringinfo_mb.h"
@@ -127,6 +128,9 @@ typedef struct BindParamCbData
  * Flag to keep track of whether we have started a transaction.
  * For extended query protocol this has to be remembered across messages.
  */
+/* Verified license for single user mode; see postmaster.c for the rationale. */
+LicenseInfo SingleUserLicense;
+
 static bool xact_started = false;
 
 /*
@@ -4105,6 +4109,28 @@ PostgresSingleUserMain(int argc, char *argv[],
 
 	/* read control file (error checking and contains config ) */
 	LocalProcessControlFile(false);
+
+	/*
+	 * Single user mode can execute arbitrary SQL against an existing cluster,
+	 * so it is covered by license verification just as the postmaster is.
+	 * Exempting it outright would be a bypass.
+	 *
+	 * The one exception is cluster creation.  initdb does its post-bootstrap
+	 * initialization by running the backend in single user mode, not in
+	 * bootstrap mode (see backend_options in src/bin/initdb/initdb.c), and that
+	 * happens while the data directory is still being built, before any license
+	 * could have been placed in it.  Enforcing there would make it impossible
+	 * to create a cluster at all.
+	 *
+	 * allow_system_table_mods is the discriminator.  initdb always passes -O,
+	 * and the option exists for initdb and developers rather than for normal
+	 * administration.  Note honestly that this means "postgres --single -O"
+	 * skips the check; doing that already requires write access to PGDATA as
+	 * the postgres user, which is the same access single user mode requires in
+	 * the first place.  See doc/LICENSE_ENFORCEMENT.md section 18.
+	 */
+	if (!allowSystemTableMods)
+		LicenseVerifyAtStartup(&SingleUserLicense, "single-user startup");
 
 	/*
 	 * process any libraries that should be preloaded at postmaster start

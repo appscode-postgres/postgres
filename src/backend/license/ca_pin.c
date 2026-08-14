@@ -29,7 +29,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#include "license.h"
+#include "license/license.h"
 
 #ifdef LICENSE_DEV_CA
 

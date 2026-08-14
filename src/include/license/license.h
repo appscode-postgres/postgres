@@ -13,7 +13,7 @@
  *
  * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  *
- * src/backend/license/license.h
+ * src/include/license/license.h
  *
  *-------------------------------------------------------------------------
  */
@@ -128,5 +128,15 @@ extern const char *license_status_name(LicenseStatus status);
  */
 extern const unsigned char appscode_ca_spki_pins[][32];
 extern const int appscode_ca_spki_pin_count;
+
+/*
+ * Server side entry points, implemented in license.c.
+ *
+ * Declared with plain C types so this header stays usable by the standalone
+ * test harness, which links license_core.c without any PostgreSQL runtime.
+ */
+extern void LicenseVerifyAtStartup(LicenseInfo *out, const char *context);
+extern void LicenseResolvePath(char *buf, size_t buflen);
+extern bool LicenseResolveCluster(char *buf, size_t buflen);
 
 #endif							/* LICENSE_H */

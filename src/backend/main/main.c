@@ -207,6 +207,23 @@ main(int argc, char *argv[])
 			BootstrapModeMain(argc, argv, true);
 			break;
 		case DISPATCH_BOOT:
+
+			/*
+			 * Bootstrap mode is deliberately exempt from license
+			 * verification.  initdb runs it to create the data directory,
+			 * which necessarily happens before any license can be placed in
+			 * PGDATA, so enforcing here would make it impossible to
+			 * initialize a cluster at all.
+			 *
+			 * This is not a bypass.  Bootstrap mode opens no sockets, serves
+			 * no clients, runs only the bootstrap parser rather than the
+			 * normal SQL grammar, and exits when initialization completes.
+			 * The exemption is reachable only by passing --boot explicitly;
+			 * the postmaster never sets it on a normal server start.  A
+			 * cluster created without a license still cannot be started
+			 * without one, because PostmasterMain() and
+			 * PostgresSingleUserMain() both verify.
+			 */
 			BootstrapModeMain(argc, argv, false);
 			break;
 		case DISPATCH_FORKCHILD:

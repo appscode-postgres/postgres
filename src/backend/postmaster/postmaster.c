@@ -97,6 +97,7 @@
 #include "lib/ilist.h"
 #include "libpq/libpq.h"
 #include "libpq/pqsignal.h"
+#include "license/license.h"
 #include "pg_getopt.h"
 #include "pgstat.h"
 #include "port/pg_bswap.h"
@@ -231,6 +232,13 @@ int			ReservedConnections;
 
 /* The socket(s) we're listening to. */
 #define MAXLISTEN	64
+/*
+ * The verified license.  Kept as a populated struct rather than a boolean so
+ * that several consumers read distinct fields from it; see
+ * doc/LICENSE_ENFORCEMENT.md section 10.
+ */
+LicenseInfo PostmasterLicense;
+
 static int	NumListenSockets = 0;
 static pgsocket *ListenSockets = NULL;
 
@@ -920,6 +928,17 @@ PostmasterMain(int argc, char *argv[])
 	 * repeat the test.
 	 */
 	LocalProcessControlFile(false);
+
+	/*
+	 * Verify the license before opening any socket, forking any child, or
+	 * loading any preloaded library.  The data directory is known and the
+	 * control file has been read by this point, and doing it here means a
+	 * shared_preload_libraries entry cannot influence the outcome.
+	 *
+	 * Fails the process rather than returning on any problem.  See
+	 * doc/LICENSE_ENFORCEMENT.md.
+	 */
+	LicenseVerifyAtStartup(&PostmasterLicense, "postmaster startup");
 
 	/*
 	 * Register the apply launcher.  It's probably a good idea to call this

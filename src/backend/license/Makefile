@@ -18,13 +18,16 @@ include $(top_builddir)/src/Makefile.global
 
 # license_core.o is deliberately free of PostgreSQL headers so the same source
 # can be linked into the standalone harness under test/.
-# license.o (postmaster glue) and license_bgworker.o (runtime expiry) are
-# added by work order steps 4 and 5. Only what exists is listed, so the tree
-# always builds.
+# license_bgworker.o (runtime expiry) is added by work order step 5.
 OBJS = \
 	$(WIN32RES) \
 	ca_pin.o \
+	license.o \
 	license_core.o
+
+# The trust anchor header is generated into the build directory, which is not
+# the source directory in a VPATH build, so both must be on the include path.
+override CPPFLAGS := -I. -I$(srcdir) $(CPPFLAGS)
 
 include $(top_srcdir)/src/backend/common.mk
 

@@ -55,7 +55,7 @@ echo "=== compiling harness ==="
 # shellcheck disable=SC2086
 gcc -std=c99 -Wall -Wextra -Wno-unused-parameter -g -O1 -D_GNU_SOURCE \
 	-DLICENSE_DEV_CA $SAN \
-	-I. -I"$LICDIR" \
+	-I. -I"$LICDIR" -I"$ROOT/src/include" \
 	-o license_test \
 	"$HERE/license_test.c" "$LICDIR/license_core.c" "$LICDIR/ca_pin.c" \
 	-lcrypto || exit 2
@@ -145,7 +145,7 @@ mkdir -p tamper && (
 	# Built WITHOUT -DLICENSE_DEV_CA, so ca_pin.c supplies the hand maintained
 	# production digest while the header supplies rogue DER bytes.
 	# shellcheck disable=SC2086
-	gcc -std=c99 -Wall -g -O1 -D_GNU_SOURCE -I. -I"$LICDIR" \
+	gcc -std=c99 -Wall -g -O1 -D_GNU_SOURCE -I. -I"$LICDIR" -I"$ROOT/src/include" \
 		-o license_test_tamper \
 		"$HERE/license_test.c" "$LICDIR/license_core.c" "$LICDIR/ca_pin.c" \
 		-lcrypto 2>/dev/null
