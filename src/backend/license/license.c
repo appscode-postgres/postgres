@@ -334,6 +334,88 @@ warn_on_license_permissions(const char *path)
 }
 
 /*
+ * Verify the license and report the outcome, without terminating the process.
+ *
+ * This is what the background worker calls: a re-check failure must be logged
+ * and turned into an orderly cluster shutdown, not into a FATAL that would
+ * merely kill and restart the worker.
+ */
+LicenseStatus
+LicenseVerifyNow(LicenseInfo *out, char *errbuf, size_t errlen)
+{
+	char		path[MAXPGPATH];
+	char		cluster[LICENSE_NAME_LEN];
+	bool		have_cluster;
+
+	LicenseResolvePath(path, sizeof(path));
+	have_cluster = LicenseResolveCluster(cluster, sizeof(cluster));
+
+	return license_verify_file(path,
+							   have_cluster ? cluster : NULL,
+							   PG_VERSION_NUM / 10000,
+							   time(NULL),
+							   out,
+							   errbuf, errlen);
+}
+
+/*
+ * Validate the clock rollback state file and advance its high water mark.
+ *
+ * Returns false, with a reason in errbuf, if the state file has been edited or
+ * the wall clock has moved backward beyond the tolerance. Both are refusals
+ * rather than warnings, since the alternative is honoring a clock an operator
+ * has moved to extend an expired license.
+ */
+bool
+LicenseUpdateState(const LicenseInfo *info, char *errbuf, size_t errlen)
+{
+	char		statepath[MAXPGPATH];
+	LicenseState st;
+	bool		corrupt = false;
+	uint64		installation = GetSystemIdentifier();
+	int64		now = (int64) time(NULL);
+
+	snprintf(statepath, sizeof(statepath), "%s/%s", DataDir,
+			 LICENSE_STATE_BASENAME);
+
+	if (read_state(statepath, &st, &corrupt))
+	{
+		if (corrupt)
+		{
+			snprintf(errbuf, errlen,
+					 "license state file \"%s\" failed its integrity check",
+					 statepath);
+			return false;
+		}
+
+		if (now < st.high_water - LICENSE_CLOCK_TOLERANCE_SECS)
+		{
+			snprintf(errbuf, errlen,
+					 "system clock appears to have moved backward by %ld seconds",
+					 (long) (st.high_water - now));
+			return false;
+		}
+
+		if (st.uuid[0] != '\0' && strcmp(st.uuid, info->uuid) != 0)
+			ereport(LOG,
+					(errmsg("license UUID changed from %s to %s",
+							st.uuid, info->uuid),
+					 errdetail("This is expected after a renewal.")));
+
+		if (st.installation != 0 && st.installation != installation)
+			ereport(LOG,
+					(errmsg("license %s is now running on a different installation",
+							info->uuid),
+					 errdetail("Recorded installation " UINT64_FORMAT ", this installation " UINT64_FORMAT ".",
+							   st.installation, installation)));
+	}
+
+	write_state(statepath, info->uuid, installation,
+				st.high_water > now ? st.high_water : now);
+	return true;
+}
+
+/*
  * Map a verification status onto the documented operator message.
  *
  * Every string is distinct so support can diagnose from a log line alone. The
@@ -344,9 +426,7 @@ static void
 license_report_failure(const LicenseInfo *info, const char *path,
 					   const char *detail)
 {
-	int			elevel = FATAL;
-
-	ereport(elevel,
+	ereport(FATAL,
 			(errcode(ERRCODE_CONFIG_FILE_ERROR),
 			 errmsg("license verification failed: %s", detail),
 			 info->uuid[0] != '\0'
@@ -368,87 +448,31 @@ void
 LicenseVerifyAtStartup(LicenseInfo *out, const char *context)
 {
 	char		path[MAXPGPATH];
-	char		statepath[MAXPGPATH];
-	char		cluster[LICENSE_NAME_LEN];
 	char		errbuf[512];
-	bool		have_cluster;
-	time_t		now = time(NULL);
-	LicenseState st;
-	bool		corrupt = false;
-	uint64		installation;
 	LicenseStatus status;
 
 	LicenseResolvePath(path, sizeof(path));
-	have_cluster = LicenseResolveCluster(cluster, sizeof(cluster));
-
 	warn_on_license_permissions(path);
 
-	status = license_verify_file(path,
-								 have_cluster ? cluster : NULL,
-								 PG_VERSION_NUM / 10000,
-								 now,
-								 out,
-								 errbuf, sizeof(errbuf));
-
+	status = LicenseVerifyNow(out, errbuf, sizeof(errbuf));
 	if (status != LICENSE_OK)
 		license_report_failure(out, path, errbuf);
 
-	/*
-	 * Clock rollback check. The installation fingerprint is the pg_control
-	 * system identifier alone; see doc/LICENSE_ENFORCEMENT.md section 9 for
-	 * why neither the cluster ID nor the data directory inode belongs here.
-	 */
-	installation = GetSystemIdentifier();
-	snprintf(statepath, sizeof(statepath), "%s/%s", DataDir,
-			 LICENSE_STATE_BASENAME);
-
-	if (read_state(statepath, &st, &corrupt))
-	{
-		if (corrupt)
-			ereport(FATAL,
-					(errcode(ERRCODE_CONFIG_FILE_ERROR),
-					 errmsg("license state file failed its integrity check"),
-					 errdetail("License UUID %s, file \"%s\".",
-							   out->uuid, statepath),
-					 errhint("Contact support before removing this file.")));
-
-		if ((int64) now < st.high_water - LICENSE_CLOCK_TOLERANCE_SECS)
-			ereport(FATAL,
-					(errcode(ERRCODE_CONFIG_FILE_ERROR),
-					 errmsg("system clock appears to have moved backward"),
-					 errdetail("License UUID %s. The clock is %ld seconds behind the highest value previously recorded.",
-							   out->uuid,
-							   (long) (st.high_water - (int64) now)),
-					 errhint("Correct the system clock before starting the server.")));
-
-		if (st.uuid[0] != '\0' && strcmp(st.uuid, out->uuid) != 0)
-			ereport(LOG,
-					(errmsg("license UUID changed from %s to %s",
-							st.uuid, out->uuid),
-					 errdetail("This is expected after a renewal.")));
-
-		if (st.installation != 0 && st.installation != installation)
-			ereport(LOG,
-					(errmsg("license %s is now running on a different installation",
-							out->uuid),
-					 errdetail("Recorded installation " UINT64_FORMAT ", this installation " UINT64_FORMAT ".",
-							   st.installation, installation)));
-	}
-
-	if (st.high_water > (int64) now)
-		write_state(statepath, out->uuid, installation, st.high_water);
-	else
-		write_state(statepath, out->uuid, installation, (int64) now);
+	if (!LicenseUpdateState(out, errbuf, sizeof(errbuf)))
+		ereport(FATAL,
+				(errcode(ERRCODE_CONFIG_FILE_ERROR),
+				 errmsg("%s", errbuf),
+				 errdetail("License UUID %s.", out->uuid),
+				 errhint("Correct the system clock, or contact support before removing the state file.")));
 
 	/* Success: one line, carrying everything support needs. */
 	ereport(LOG,
 			(errmsg("license %s verified for \"%s\"",
 					out->uuid, out->licensee),
-			 errdetail("Product %s, versions %s, cluster %s, expires %s (%d days remaining), serial %s.",
+			 errdetail("Product %s, versions %s, cluster %s, %d days remaining, serial %s.",
 					   out->product,
 					   out->version_constraint,
 					   out->cluster_unbound ? "any" : out->cluster_id,
-					   "see not_after",
 					   out->days_remaining,
 					   out->serial_hex)));
 

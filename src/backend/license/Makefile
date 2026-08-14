@@ -18,11 +18,11 @@ include $(top_builddir)/src/Makefile.global
 
 # license_core.o is deliberately free of PostgreSQL headers so the same source
 # can be linked into the standalone harness under test/.
-# license_bgworker.o (runtime expiry) is added by work order step 5.
 OBJS = \
 	$(WIN32RES) \
 	ca_pin.o \
 	license.o \
+	license_bgworker.o \
 	license_core.o
 
 # The trust anchor header is generated into the build directory, which is not

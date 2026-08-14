@@ -941,6 +941,14 @@ PostmasterMain(int argc, char *argv[])
 	LicenseVerifyAtStartup(&PostmasterLicense, "postmaster startup");
 
 	/*
+	 * Re-check the license periodically while the server runs, so an expiry
+	 * shuts the cluster down and a renewal is picked up without a restart.
+	 * Registered here rather than through shared_preload_libraries, which is
+	 * user editable.
+	 */
+	LicenseWorkerRegister();
+
+	/*
 	 * Register the apply launcher.  It's probably a good idea to call this
 	 * before any modules had a chance to take the background worker slots.
 	 */

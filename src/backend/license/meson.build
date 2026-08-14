@@ -36,10 +36,10 @@ license_ca_header = custom_target('appscode_root_ca.h',
 )
 generated_backend_sources += license_ca_header
 
-# license_bgworker.c (runtime expiry) is added by work order step 5.
 license_sources = files(
   'ca_pin.c',
   'license.c',
+  'license_bgworker.c',
   'license_core.c',
 )
 

@@ -139,4 +139,17 @@ extern void LicenseVerifyAtStartup(LicenseInfo *out, const char *context);
 extern void LicenseResolvePath(char *buf, size_t buflen);
 extern bool LicenseResolveCluster(char *buf, size_t buflen);
 
+/*
+ * Reporting-free verification, used by the re-check worker. A runtime failure
+ * must become an orderly cluster shutdown, not a FATAL that would only kill
+ * and restart the worker.
+ */
+extern LicenseStatus LicenseVerifyNow(LicenseInfo *out, char *errbuf,
+									  size_t errlen);
+extern bool LicenseUpdateState(const LicenseInfo *info, char *errbuf,
+							   size_t errlen);
+
+/* Implemented in license_bgworker.c. */
+extern void LicenseWorkerRegister(void);
+
 #endif							/* LICENSE_H */

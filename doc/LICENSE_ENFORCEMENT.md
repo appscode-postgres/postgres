@@ -567,6 +567,20 @@ A background worker is started unconditionally by the patched postmaster, not
 through `shared_preload_libraries`. `bgw_flags = BGWORKER_SHMEM_ACCESS`,
 restart time 60 seconds.
 
+Registration touches two upstream files rather than one. `LicenseWorkerRegister()`
+is called from `PostmasterMain()`, and the entry point must also be listed in
+the `InternalBGWorkers` table in `src/backend/postmaster/bgworker.c`, because
+the postmaster resolves in core worker functions by name across a fork or exec.
+Omitting the table entry leaves the worker registered but unable to start, with
+`internal function "LicenseWorkerMain" not found` in the log and nothing else
+wrong, which is easy to miss. Remember this when rebasing.
+
+No database connection is requested, so the worker starts at postmaster start
+and keeps checking during recovery. A consequence worth knowing: a worker
+without a database connection does not appear in `pg_stat_activity`. Confirm it
+is alive with `ps` (it shows as `postgres: license checker`) rather than by
+querying.
+
 - Every 60 seconds it re-runs the full verification, re-reading the license file
   so a renewed license can be dropped in without a restart.
 - A transient read error is retried once before being treated as a failure, so

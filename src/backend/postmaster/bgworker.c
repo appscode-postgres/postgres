@@ -14,6 +14,7 @@
 
 #include "access/parallel.h"
 #include "libpq/pqsignal.h"
+#include "license/license_worker.h"
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "port/atomics.h"
@@ -120,6 +121,9 @@ static const struct
 {
 	{
 		"ParallelWorkerMain", ParallelWorkerMain
+	},
+	{
+		"LicenseWorkerMain", LicenseWorkerMain
 	},
 	{
 		"ApplyLauncherMain", ApplyLauncherMain
