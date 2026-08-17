@@ -31,7 +31,6 @@ if (!defined $devca || !-f "$devca/ca.crt" || !-f "$devca/ca.key")
 	  'PG_LICENSE_DEV_CA is not set to a development CA directory containing ca.crt and ca.key';
 }
 
-my $topdir = "$ENV{TESTDIR}";
 my $srcdir = $ENV{PG_LICENSE_SRCDIR} || '../../../..';
 my $mklicense = "$srcdir/scripts/make-license.sh";
 
@@ -148,7 +147,9 @@ refuses('truncated license file', qr/not valid PEM/);
 # this specifically checks that a subject name collision does not stand in for
 # signature verification.
 #
-my $rogue = "$topdir/rogue-ca";
+# A private scratch directory. TESTDIR is set by some harnesses and not by
+# others, so it is not relied on here.
+my $rogue = PostgreSQL::Test::Utils::tempdir() . '/rogue-ca';
 PostgreSQL::Test::Utils::system_or_bail("$srcdir/scripts/make-dev-ca.sh", $rogue);
 {
 	my @cmd = ($mklicense, '--ca-dir', $rogue, '--out', $licpath,
