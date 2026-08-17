@@ -84,7 +84,11 @@ sub new
 	($arg, $devel) = ($1, $2)
 	  if (
 		$arg =~ m!^                             # beginning of line
-          (?:\(?PostgreSQL\)?\s)?         # ignore PostgreSQL marker
+          (?:\(?(?:Postgres\ Enterprise\ by\ AppsCode|PostgreSQL)\)?\s)?
+                                          # ignore product name marker; accept
+                                          # both our own and upstream's, so we
+                                          # can still compare against stock
+                                          # PostgreSQL binaries
           (\d+(?:\.\d+)*)                 # version number, dotted notation
           (devel|(?:alpha|beta|rc)\d+)?   # dev marker - see version_stamp.pl
 		 !x);
