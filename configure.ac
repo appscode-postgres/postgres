@@ -17,7 +17,7 @@ dnl Read the Autoconf manual for details.
 dnl
 m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 
-AC_INIT([PostgreSQL], [16.10], [pgsql-bugs@lists.postgresql.org], [], [https://www.postgresql.org/])
+AC_INIT([Postgres Enterprise by AppsCode], [16.10], [pgsql-bugs@lists.postgresql.org], [postgresql], [https://www.postgresql.org/])
 
 m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
 Untested combinations of 'autoconf' and PostgreSQL versions are not
@@ -2412,7 +2412,7 @@ else
 fi
 
 AC_DEFINE_UNQUOTED(PG_VERSION_STR,
-                   ["PostgreSQL $PG_VERSION on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
+                   ["Postgres Enterprise by AppsCode $PG_VERSION on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
                    [A string containing the version number, platform, and C compiler])
 
 # Supply a numeric version string for use by 3rd party add-ons
