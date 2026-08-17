@@ -35,6 +35,7 @@ get_bin_version(ClusterInfo *cluster)
 	char		cmd[MAXPGPATH],
 				cmd_output[MAX_STRING];
 	FILE	   *output;
+	char	   *last_space;
 	int			rc;
 	int			v1 = 0,
 				v2 = 0;
@@ -52,7 +53,17 @@ get_bin_version(ClusterInfo *cluster)
 		pg_fatal("could not get pg_ctl version data using %s: %s",
 				 cmd, wait_result_to_str(rc));
 
-	if (sscanf(cmd_output, "%*s %*s %d.%d", &v1, &v2) < 1)
+	/*
+	 * The version number is the last whitespace-separated field of
+	 * "pg_ctl (PRODUCT NAME) VERSION".  Scan back from the end rather than
+	 * skipping a fixed number of leading fields, since our product name
+	 * contains spaces while the stock "PostgreSQL" name printed by an older
+	 * cluster's binaries does not.
+	 */
+	last_space = strrchr(cmd_output, ' ');
+
+	if (last_space == NULL ||
+		sscanf(last_space + 1, "%d.%d", &v1, &v2) < 1)
 		pg_fatal("could not get pg_ctl version output from %s", cmd);
 
 	if (v1 < 10)
@@ -450,7 +461,7 @@ check_exec(const char *dir, const char *program, bool check_version)
 	{
 		pg_strip_crlf(line);
 
-		snprintf(versionstr, sizeof(versionstr), "%s (PostgreSQL) " PG_VERSION, program);
+		snprintf(versionstr, sizeof(versionstr), "%s (Postgres Enterprise by AppsCode) " PG_VERSION, program);
 
 		if (strcmp(line, versionstr) != 0)
 			pg_fatal("check for \"%s\" failed: incorrect version: found \"%s\", expected \"%s\"",

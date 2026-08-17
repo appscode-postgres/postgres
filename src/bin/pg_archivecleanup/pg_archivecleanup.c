@@ -289,7 +289,7 @@ main(int argc, char **argv)
 		}
 		if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)
 		{
-			puts("pg_archivecleanup (PostgreSQL) " PG_VERSION);
+			puts("pg_archivecleanup (Postgres Enterprise by AppsCode) " PG_VERSION);
 			exit(0);
 		}
 	}
