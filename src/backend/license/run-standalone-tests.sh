@@ -34,7 +34,7 @@ python3 "$here/generate-ca-header.py" \
 # Build the harness against the dev CA.
 $CC -Wall -Wextra -Wno-unused-parameter -std=c99 \
 	-DAPPSCODE_LICENSE_DEV_BUILD \
-	-I"$here" -I"$work/gen" \
+	-I"$root/src/include" -I"$here" -I"$work/gen" \
 	"$here/license.c" "$here/license_pins.c" "$here/license_test.c" \
 	-lcrypto -o "$work/license_test"
 

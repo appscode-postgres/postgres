@@ -36,7 +36,7 @@
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
-#include "license.h"
+#include "license/license.h"
 
 /* Embedded trust-anchor DER bytes; generated, in this TU only. */
 #include "appscode_root_ca_der.h"
@@ -44,6 +44,11 @@
 /*
  * Set info->reason from a printf-style format, once, safely truncating.
  */
+#if defined(__GNUC__)
+static void set_reason(LicenseInfo *info, const char *fmt,...)
+			__attribute__((format(printf, 2, 3)));
+#endif
+
 static void
 set_reason(LicenseInfo *info, const char *fmt,...)
 {
