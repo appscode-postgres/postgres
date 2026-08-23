@@ -20,7 +20,7 @@
  *
  *-------------------------------------------------------------------------
  */
-#include "license.h"
+#include "license/license.h"
 
 #ifdef APPSCODE_LICENSE_DEV_BUILD
 
