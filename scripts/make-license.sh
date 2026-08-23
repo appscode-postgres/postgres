@@ -64,6 +64,8 @@ optional:
   --eku NAME          leaf extended key usage: clientAuth or serverAuth
                       (default: clientAuth; serverAuth is for the
                       "wrong EKU is rejected" negative test)
+  --no-eku            omit the extended key usage extension entirely
+                      (for the "no EKU is rejected" negative test)
   --locality LIST     comma-separated L values (key=value feature flags),
                       empty by default
   --no-san            omit the subjectAltName extension entirely
@@ -84,6 +86,7 @@ days=30
 valid_seconds=
 not_before=0
 eku=clientAuth
+want_eku=1
 locality=
 want_san=1
 
@@ -102,6 +105,7 @@ while [ $# -gt 0 ]; do
 		--valid-seconds) valid_seconds=$2; shift 2 ;;
 		--not-before)    not_before=$2; shift 2 ;;
 		--eku)           eku=$2; shift 2 ;;
+		--no-eku)        want_eku=0; shift ;;
 		--locality)      locality=$2; shift 2 ;;
 		--no-san)        want_san=0; shift ;;
 		-h|--help)       usage ;;
@@ -132,6 +136,7 @@ export LIC_FEATURES="$features" LIC_PLAN="$plan" LIC_TIER="$tier"
 export LIC_PRODUCT="$product" LIC_CN="$cn" LIC_EMAIL="$email"
 export LIC_VALID_SECONDS="$valid_seconds" LIC_NOT_BEFORE="$not_before"
 export LIC_EKU="$eku" LIC_LOCALITY="$locality" LIC_WANT_SAN="$want_san"
+export LIC_WANT_EKU="$want_eku"
 
 python3 - <<'PY'
 import datetime
@@ -228,7 +233,6 @@ builder = (
         ),
         critical=True,
     )
-    .add_extension(eku, critical=False)
     .add_extension(
         x509.SubjectKeyIdentifier.from_public_key(leaf_key.public_key()),
         critical=False,
@@ -238,6 +242,9 @@ builder = (
         critical=False,
     )
 )
+
+if env("LIC_WANT_EKU") == "1":
+    builder = builder.add_extension(eku, critical=False)
 
 if env("LIC_WANT_SAN") == "1":
     sans = [x509.DNSName(env("LIC_CN"))]
