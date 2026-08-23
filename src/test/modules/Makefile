@@ -11,6 +11,7 @@ SUBDIRS = \
 		  dummy_index_am \
 		  dummy_seclabel \
 		  libpq_pipeline \
+		  license \
 		  plsample \
 		  spgist_name_ops \
 		  test_bloomfilter \
