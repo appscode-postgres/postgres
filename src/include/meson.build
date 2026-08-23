@@ -141,6 +141,7 @@ header_subdirs = [
   'jit',
   'lib',
   'libpq',
+  'license',
   'mb',
   'nodes',
   'optimizer',

@@ -55,6 +55,7 @@ license_der_h = custom_target('appscode_root_ca_der.h',
 license_lib = static_library('license_srv',
   files(
     'license.c',
+    'license_bgworker.c',
     'license_check.c',
     'license_pins.c',
     'license_state.c',

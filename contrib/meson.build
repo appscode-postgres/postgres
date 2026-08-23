@@ -8,6 +8,7 @@ contrib_data_args = {
 }
 
 subdir('adminpack')
+subdir('appscode_license')
 subdir('amcheck')
 subdir('auth_delay')
 subdir('auto_explain')
