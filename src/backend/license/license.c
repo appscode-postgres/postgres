@@ -96,10 +96,9 @@ to_hex_colon(const unsigned char *in, size_t len, char *out)
  * Load the embedded trust anchors into a fresh STACK_OF(X509). Returns NULL
  * on failure. Caller frees with sk_X509_pop_free(sk, X509_free).
  */
-static STACK_OF(X509) *
-load_embedded_anchors(void)
+static STACK_OF(X509) *load_embedded_anchors(void)
 {
-	STACK_OF(X509) *sk = sk_X509_new_null();
+	STACK_OF(X509) * sk = sk_X509_new_null();
 	int			i;
 
 	if (sk == NULL)
@@ -339,8 +338,9 @@ appscode_license_verify(const char *path, LicenseInfo *info)
 	size_t		filelen = 0;
 	BIO		   *bio = NULL;
 	X509	   *leaf = NULL;
-	STACK_OF(X509) *chain = NULL;	/* untrusted intermediates from bundle */
-	STACK_OF(X509) *anchors = NULL;
+
+	STACK_OF(X509) * chain = NULL;	/* untrusted intermediates from bundle */
+	STACK_OF(X509) * anchors = NULL;
 	X509_STORE *store = NULL;
 	X509_STORE_CTX *ctx = NULL;
 	X509_NAME  *subject;
@@ -538,11 +538,10 @@ appscode_license_verify(const char *path, LicenseInfo *info)
 	}
 
 	/*
-	 * Step 3c: leaf must carry the clientAuth EKU (part of gate 1). Note
-	 * that X509_get_extended_key_usage() returns all-ones when the EKU
-	 * extension is absent, so an explicit presence check via
-	 * EXFLAG_XKUSAGE is required; otherwise a license with no EKU at all
-	 * would pass.
+	 * Step 3c: leaf must carry the clientAuth EKU (part of gate 1). Note that
+	 * X509_get_extended_key_usage() returns all-ones when the EKU extension
+	 * is absent, so an explicit presence check via EXFLAG_XKUSAGE is
+	 * required; otherwise a license with no EKU at all would pass.
 	 */
 	xku = X509_get_extended_key_usage(leaf);
 	if ((X509_get_extension_flags(leaf) & EXFLAG_XKUSAGE) == 0 ||

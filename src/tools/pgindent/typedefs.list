@@ -6,6 +6,7 @@ ASN1_INTEGER
 ASN1_OBJECT
 ASN1_OCTET_STRING
 ASN1_STRING
+ASN1_TIME
 AV
 A_ArrayExpr
 A_Const
@@ -120,6 +121,9 @@ AppendState
 ApplyErrorCallbackArg
 ApplyExecutionData
 ApplySubXactData
+AppsCodeCaDer
+AppsCodeLicenseReport
+AppsCodeLicenseShared
 Archive
 ArchiveCheckConfiguredCB
 ArchiveEntryPtrType
@@ -628,6 +632,7 @@ EVP_CIPHER_CTX
 EVP_MD
 EVP_MD_CTX
 EVP_PKEY
+EXTENDED_KEY_USAGE
 EachState
 Edge
 EditableObjectType
@@ -1419,6 +1424,10 @@ LexemeInfo
 LexemeKey
 LexizeData
 LibraryInfo
+LicenseInfo
+LicenseStateInput
+LicenseStateResult
+LicenseStatus
 Limit
 LimitOption
 LimitPath
@@ -3061,6 +3070,7 @@ X509_NAME
 X509_NAME_ENTRY
 X509_STORE
 X509_STORE_CTX
+X509_VERIFY_PARAM
 XLTW_Oper
 XLogCtlData
 XLogCtlInsert
