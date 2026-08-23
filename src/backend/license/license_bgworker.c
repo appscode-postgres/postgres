@@ -136,8 +136,8 @@ AppsCodeLicenseWorkerMain(Datum main_arg)
 		{
 			/*
 			 * Retry once after a short delay before treating this as a
-			 * failure, so a partially written license file during an
-			 * in-place renewal does not take the cluster down.
+			 * failure, so a partially written license file during an in-place
+			 * renewal does not take the cluster down.
 			 */
 			(void) WaitLatch(MyLatch,
 							 WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
