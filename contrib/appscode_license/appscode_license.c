@@ -87,12 +87,12 @@ appscode_license_info(PG_FUNCTION_ARGS)
 								   TYPALIGN_INT);
 	}
 
-	values[0] = CStringGetTextDatum(rep.serial_dec); /* license ID (serial) */
-	values[1] = CStringGetTextDatum(rep.cn);		 /* CN, distinct id */
+	values[0] = CStringGetTextDatum(rep.serial_dec);	/* license ID (serial) */
+	values[1] = CStringGetTextDatum(rep.cn);	/* CN, distinct id */
 	values[2] = CStringGetTextDatum(rep.product_line);	/* C */
-	values[3] = CStringGetTextDatum(rep.tier);		 /* ST */
-	values[4] = CStringGetTextDatum(rep.plan);		 /* OU */
-	values[5] = PointerGetDatum(feat_arr);			 /* O */
+	values[3] = CStringGetTextDatum(rep.tier);	/* ST */
+	values[4] = CStringGetTextDatum(rep.plan);	/* OU */
+	values[5] = PointerGetDatum(feat_arr);	/* O */
 	values[6] = CStringGetTextDatum(rep.not_before);
 	values[7] = CStringGetTextDatum(rep.not_after);
 	values[8] = Int64GetDatum(rep.days_remaining);

@@ -55,7 +55,7 @@ typedef enum LicenseStatus
 	LICENSE_ERR_NO_CLIENTAUTH,	/* leaf lacks the clientAuth EKU */
 	LICENSE_ERR_NOT_YET_VALID,	/* notBefore in the future */
 	LICENSE_ERR_EXPIRED,		/* notAfter in the past */
-	LICENSE_ERR_MISSING_FEATURE, /* O list lacks postgres-enterprise */
+	LICENSE_ERR_MISSING_FEATURE,	/* O list lacks postgres-enterprise */
 	LICENSE_ERR_CA_SELFCHECK,	/* embedded CA failed its pin check */
 	LICENSE_ERR_INTERNAL		/* OpenSSL or allocation failure */
 } LicenseStatus;
@@ -98,7 +98,7 @@ typedef struct LicenseInfo
  * malloc/free internally.
  */
 extern LicenseStatus appscode_license_verify(const char *path,
-											  LicenseInfo *info);
+											 LicenseInfo *info);
 
 /*
  * Resolve the license path: PGLICENSE if set, else datadir/license.pem if
