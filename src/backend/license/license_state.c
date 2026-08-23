@@ -167,8 +167,9 @@ compute_hmac(const unsigned char *key, unsigned int keylen,
  *  -2  I/O error
  */
 static int
-read_state(const char *path, const unsigned char *key, unsigned int keylen,
-		   char *fingerprint, size_t fplen, long *hwm)
+read_state(const char *path, const char *ca_fp_hex,
+		   char *fingerprint, size_t fplen, long *hwm,
+		   char *serial_out, size_t serlen)
 {
 	FILE	   *f = fopen(path, "rb");
 	char		line[512];
@@ -180,6 +181,8 @@ read_state(const char *path, const unsigned char *key, unsigned int keylen,
 	bool		have_magic = false;
 	char		body[1024];
 	char		calc_hmac[2 * EVP_MAX_MD_SIZE + 1];
+	unsigned char key[EVP_MAX_MD_SIZE];
+	unsigned int keylen;
 	int			blen;
 
 	if (f == NULL)
@@ -218,6 +221,18 @@ read_state(const char *path, const unsigned char *key, unsigned int keylen,
 	if (!have_magic || got_fp[0] == '\0' || got_hmac[0] == '\0')
 		return -1;
 
+	/*
+	 * Derive the key from the serial stored in the file, so the file is
+	 * self-verifying regardless of which license is now in effect. A
+	 * legitimate license replacement carries a new serial; the old state
+	 * file still verifies here (proving it was written by this build), and
+	 * the caller then regenerates it for the new serial. Only a real
+	 * integrity failure (edited bytes) makes the HMAC mismatch.
+	 */
+	keylen = derive_key(ca_fp_hex, got_serial, key);
+	if (keylen == 0)
+		return -1;
+
 	blen = format_body(body, sizeof(body), got_fp, got_hwm, got_serial, got_cn);
 	if (blen < 0 || (size_t) blen >= sizeof(body))
 		return -1;
@@ -228,6 +243,8 @@ read_state(const char *path, const unsigned char *key, unsigned int keylen,
 
 	snprintf(fingerprint, fplen, "%s", got_fp);
 	*hwm = got_hwm;
+	if (serial_out != NULL)
+		snprintf(serial_out, serlen, "%s", got_serial);
 	return 1;
 }
 
@@ -291,6 +308,7 @@ appscode_license_state_update(const LicenseStateInput *in, bool *new_install,
 	unsigned int keylen;
 	char		cur_fp[128];
 	char		old_fp[128];
+	char		old_serial[128] = "";
 	long		old_hwm = 0;
 	long		hwm;
 	int			rc;
@@ -306,6 +324,7 @@ appscode_license_state_update(const LicenseStateInput *in, bool *new_install,
 		return LSTATE_ERR_IO;
 	}
 
+	/* Key for writing is derived from the current license serial. */
 	keylen = derive_key(in->ca_fingerprint_hex, in->serial_dec, key);
 	if (keylen == 0)
 	{
@@ -315,7 +334,9 @@ appscode_license_state_update(const LicenseStateInput *in, bool *new_install,
 
 	snprintf(path, sizeof(path), "%s/%s", in->datadir, STATE_FILENAME);
 
-	rc = read_state(path, key, keylen, old_fp, sizeof(old_fp), &old_hwm);
+	/* Verification key is derived internally from the file's own serial. */
+	rc = read_state(path, in->ca_fingerprint_hex, old_fp, sizeof(old_fp),
+					&old_hwm, old_serial, sizeof(old_serial));
 	if (rc == -2)
 	{
 		snprintf(msg, msglen, "could not read license state file \"%s\"", path);
@@ -339,7 +360,13 @@ appscode_license_state_update(const LicenseStateInput *in, bool *new_install,
 					 in->clock_tolerance_sec / 3600);
 			return LSTATE_ERR_CLOCK_BACK;
 		}
-		/* New-installation detection (advisory). */
+		/*
+		 * New-installation detection (advisory). A changed installation
+		 * fingerprint means the license or data directory moved; a changed
+		 * serial means the license was replaced. Either way the file is
+		 * authentic (HMAC verified above), so this is not tampering; the
+		 * high-water mark is carried forward below and the file rewritten.
+		 */
 		if (strcmp(old_fp, cur_fp) != 0)
 			*new_install = true;
 	}
