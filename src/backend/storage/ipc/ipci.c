@@ -27,6 +27,7 @@
 #include "commands/async.h"
 #include "miscadmin.h"
 #include "pgstat.h"
+#include "license/license_check.h"
 #include "postmaster/autovacuum.h"
 #include "postmaster/bgworker_internals.h"
 #include "postmaster/bgwriter.h"
@@ -145,6 +146,7 @@ CalculateShmemSize(int *num_semaphores)
 	size = add_size(size, WalSummarizerShmemSize());
 	size = add_size(size, PgArchShmemSize());
 	size = add_size(size, ApplyLauncherShmemSize());
+	size = add_size(size, AppsCodeLicenseShmemSize());
 	size = add_size(size, BTreeShmemSize());
 	size = add_size(size, SyncScanShmemSize());
 	size = add_size(size, AsyncShmemSize());
@@ -347,6 +349,7 @@ CreateOrAttachShmemStructs(void)
 	PgArchShmemInit();
 	ApplyLauncherShmemInit();
 	SlotSyncShmemInit();
+	AppsCodeLicenseShmemInit();
 
 	/*
 	 * Set up other modules that need some shared memory space
