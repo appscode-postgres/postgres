@@ -42,6 +42,9 @@ typedef struct LicenseStateInput
 	const char *cn;				/* license CN */
 	long		clock_tolerance_sec;	/* rollback tolerance */
 	long		now;			/* current wall clock (epoch seconds) */
+	int			file_mode;		/* permissions for the state file, normally
+								 * the cluster's pg_file_create_mode (0600, or
+								 * 0640 for a group-access cluster) */
 } LicenseStateInput;
 
 /*

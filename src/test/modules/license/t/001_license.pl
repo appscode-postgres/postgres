@@ -112,6 +112,15 @@ $node->append_conf('postgresql.conf', "log_min_messages = warning\n");
 		'valid license: version string is rebranded');
 	like($log, qr/license accepted: id \(serial\)/,
 		'valid license: acceptance line logged');
+
+	# The state file must honor the cluster file-creation mode. This is a
+	# default (non group-access) cluster, so it must not be group/world
+	# accessible; otherwise "check PGDATA permissions" in the core tool
+	# suites (initdb, pg_ctl, pg_basebackup, pg_rewind) fails.
+	my $mode = (stat($node->data_dir . '/.pg_license_state'))[2] & 07777;
+	is($mode & 077, 0,
+		'state file is not group/world accessible on a default cluster');
+
 	$node->stop;
 }
 
