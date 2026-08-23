@@ -933,6 +933,13 @@ PostmasterMain(int argc, char *argv[])
 	AppsCodeLicenseCheckStartup("postmaster");
 
 	/*
+	 * Register the license enforcement background worker, which re-checks the
+	 * license periodically and shuts the cluster down on expiry. Registered
+	 * here, unconditionally, rather than via shared_preload_libraries.
+	 */
+	AppsCodeLicenseRegisterWorker();
+
+	/*
 	 * Register the apply launcher.  It's probably a good idea to call this
 	 * before any modules had a chance to take the background worker slots.
 	 */

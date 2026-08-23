@@ -1,0 +1,5 @@
+# appscode_license extension
+comment = 'reporting for AppsCode license enforcement'
+default_version = '1.0'
+module_pathname = '$libdir/appscode_license'
+relocatable = true
