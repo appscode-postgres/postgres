@@ -11,6 +11,7 @@ SUBDIRS = \
 		  dummy_index_am \
 		  dummy_seclabel \
 		  libpq_pipeline \
+		  license \
 		  plsample \
 		  snapshot_too_old \
 		  spgist_name_ops \
