@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "license.h"
+#include "license/license.h"
 
 static void
 dump(const LicenseInfo *info)

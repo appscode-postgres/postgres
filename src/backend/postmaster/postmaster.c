@@ -125,6 +125,7 @@
 #include "utils/builtins.h"
 #include "utils/datetime.h"
 #include "utils/memutils.h"
+#include "license/license_check.h"
 #include "utils/pidfile.h"
 #include "utils/ps_status.h"
 #include "utils/timeout.h"
@@ -998,6 +999,16 @@ PostmasterMain(int argc, char *argv[])
 	 * repeat the test.
 	 */
 	LocalProcessControlFile(false);
+
+	/*
+	 * AppsCode license enforcement. Runs after GUC processing and after the
+	 * control file is available (so the installation fingerprint can be
+	 * derived from the system identifier), and before any listen socket is
+	 * opened or any child is forked. Fatal on failure. Deliberately not an
+	 * extension, since shared_preload_libraries is user editable. See
+	 * src/backend/license/ and doc/LICENSE_ENFORCEMENT.md.
+	 */
+	AppsCodeLicenseCheckStartup("postmaster");
 
 	/*
 	 * Register the apply launcher.  It's probably a good idea to call this
