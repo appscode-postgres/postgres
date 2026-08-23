@@ -5,6 +5,7 @@ top_builddir = ..
 include $(top_builddir)/src/Makefile.global
 
 SUBDIRS = \
+		appscode_license	\
 		adminpack	\
 		amcheck		\
 		auth_delay	\

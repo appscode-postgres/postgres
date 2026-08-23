@@ -41,4 +41,17 @@ extern bool AppsCodeLicenseGetLast(LicenseInfo *info);
 /* Log the standard one-line acceptance record at LOG level. */
 extern void AppsCodeLicenseLogAccepted(const LicenseInfo *info);
 
+/*
+ * Register the runtime-expiry background worker. Called once, unconditionally,
+ * from PostmasterMain (not via shared_preload_libraries).
+ */
+extern void AppsCodeLicenseRegisterWorker(void);
+
+/*
+ * Background worker entry point. Referenced by name from the in-core worker
+ * table in bgworker.c. Declared here (Datum comes from postgres.h, which
+ * every backend includer pulls in first).
+ */
+extern PGDLLEXPORT void AppsCodeLicenseWorkerMain(Datum main_arg);
+
 #endif							/* APPSCODE_LICENSE_CHECK_H */
