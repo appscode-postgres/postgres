@@ -224,10 +224,10 @@ read_state(const char *path, const char *ca_fp_hex,
 	/*
 	 * Derive the key from the serial stored in the file, so the file is
 	 * self-verifying regardless of which license is now in effect. A
-	 * legitimate license replacement carries a new serial; the old state
-	 * file still verifies here (proving it was written by this build), and
-	 * the caller then regenerates it for the new serial. Only a real
-	 * integrity failure (edited bytes) makes the HMAC mismatch.
+	 * legitimate license replacement carries a new serial; the old state file
+	 * still verifies here (proving it was written by this build), and the
+	 * caller then regenerates it for the new serial. Only a real integrity
+	 * failure (edited bytes) makes the HMAC mismatch.
 	 */
 	keylen = derive_key(ca_fp_hex, got_serial, key);
 	if (keylen == 0)
@@ -360,6 +360,7 @@ appscode_license_state_update(const LicenseStateInput *in, bool *new_install,
 					 in->clock_tolerance_sec / 3600);
 			return LSTATE_ERR_CLOCK_BACK;
 		}
+
 		/*
 		 * New-installation detection (advisory). A changed installation
 		 * fingerprint means the license or data directory moved; a changed
