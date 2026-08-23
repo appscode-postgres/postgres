@@ -248,11 +248,16 @@ read_state(const char *path, const char *ca_fp_hex,
 	return 1;
 }
 
-/* Atomically write the state file with mode 0600. Returns false on error. */
+/*
+ * Atomically write the state file. The mode is the caller's file_mode (the
+ * cluster's pg_file_create_mode), so a group-access data directory gets 0640
+ * and a default one gets 0600, matching every other file in PGDATA. Returns
+ * false on error.
+ */
 static bool
 write_state(const char *path, const unsigned char *key, unsigned int keylen,
 			const char *fingerprint, long hwm,
-			const char *serial, const char *cn)
+			const char *serial, const char *cn, int file_mode)
 {
 	char		body[1024];
 	char		hmac_hex[2 * EVP_MAX_MD_SIZE + 1];
@@ -268,9 +273,11 @@ write_state(const char *path, const unsigned char *key, unsigned int keylen,
 		return false;
 
 	snprintf(tmp, sizeof(tmp), "%s.tmp", path);
-	fd = open(tmp, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+	fd = open(tmp, O_CREAT | O_WRONLY | O_TRUNC, file_mode);
 	if (fd < 0)
 		return false;
+	/* open() honors the umask, so set the exact mode explicitly. */
+	(void) fchmod(fd, file_mode);
 	f = fdopen(fd, "wb");
 	if (f == NULL)
 	{
@@ -375,7 +382,8 @@ appscode_license_state_update(const LicenseStateInput *in, bool *new_install,
 	/* Advance the high-water mark; never let it move backward. */
 	hwm = (rc == 1 && old_hwm > in->now) ? old_hwm : in->now;
 
-	if (!write_state(path, key, keylen, cur_fp, hwm, in->serial_dec, in->cn))
+	if (!write_state(path, key, keylen, cur_fp, hwm, in->serial_dec, in->cn,
+					 in->file_mode))
 	{
 		snprintf(msg, msglen,
 				 "could not write license state file \"%s\"", path);

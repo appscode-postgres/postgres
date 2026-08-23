@@ -279,8 +279,10 @@ secondarily, the CN.
 
 ## 9. Clock-rollback resistance and the state file
 
-State lives in `$PGDATA/.pg_license_state`, mode 0600, owned by the
-data directory owner. Text format, version 1:
+State lives in `$PGDATA/.pg_license_state`, owned by the data directory
+owner and created with the cluster's file-creation mode (`pg_file_create_mode`,
+so 0600 by default or 0640 for a group-access data directory), matching
+every other file in PGDATA. Text format, version 1:
 
 ```
 PGLICSTATE1

@@ -24,6 +24,7 @@
 #include <time.h>
 
 #include "access/xlog.h"
+#include "common/file_perm.h"
 #include "miscadmin.h"
 #include "storage/shmem.h"
 #include "storage/spin.h"
@@ -171,6 +172,12 @@ license_fatal(const LicenseInfo *info, const char *path, const char *mode_label)
 void
 AppsCodeLicenseLogAccepted(const LicenseInfo *info)
 {
+	AppsCodeLicenseLogAcceptedAt(info, LOG);
+}
+
+void
+AppsCodeLicenseLogAcceptedAt(const LicenseInfo *info, int elevel)
+{
 	StringInfoData feats;
 	int			i;
 
@@ -179,11 +186,13 @@ AppsCodeLicenseLogAccepted(const LicenseInfo *info)
 		appendStringInfo(&feats, "%s%s", i ? "," : "", info->features[i]);
 
 	/*
-	 * One LOG line with the identifying and informational fields. The serial
-	 * is the license ID; the CN is labeled as a separate identifier. The SAN
-	 * email is never logged.
+	 * One line with the identifying and informational fields. The serial is
+	 * the license ID; the CN is labeled as a separate identifier. The SAN
+	 * email is never logged. The postmaster path logs this at LOG; the
+	 * single-user path uses DEBUG1 so that initdb's post-bootstrap phase does
+	 * not emit unexpected stderr.
 	 */
-	ereport(LOG,
+	ereport(elevel,
 			(errmsg("license accepted: id (serial) %s, CN %s, features %s, plan %s, product line %s, tier %s, expires %s (%ld days remaining), certificate SHA-256 %s",
 					info->serial_dec[0] ? info->serial_dec : "(none)",
 					info->cn[0] ? info->cn : "(none)",
@@ -206,6 +215,14 @@ AppsCodeLicenseCheckStartup(const char *mode_label)
 	LicenseStateResult sres;
 	bool		new_install = false;
 	char		smsg[256];
+
+	/*
+	 * In single-user mode (which includes initdb's post-bootstrap phase) the
+	 * informational lines go to DEBUG1 so initdb produces no unexpected
+	 * stderr. Verification and its fatal failures are unaffected.
+	 */
+	int			info_elevel =
+		(strcmp(mode_label, "single-user") == 0) ? DEBUG1 : LOG;
 
 	path = appscode_license_resolve_path(DataDir);
 	if (path == NULL)
@@ -232,6 +249,7 @@ AppsCodeLicenseCheckStartup(const char *mode_label)
 	sin.cn = info.cn;
 	sin.clock_tolerance_sec = APPSCODE_LICENSE_CLOCK_TOLERANCE_SEC;
 	sin.now = (long) time(NULL);
+	sin.file_mode = pg_file_create_mode;
 
 	sres = appscode_license_state_update(&sin, &new_install, smsg, sizeof(smsg));
 	switch (sres)
@@ -259,11 +277,11 @@ AppsCodeLicenseCheckStartup(const char *mode_label)
 	}
 
 	if (new_install)
-		ereport(LOG,
+		ereport(info_elevel,
 				(errmsg("license id (serial) %s is now running on a new installation",
 						info.serial_dec)));
 
-	AppsCodeLicenseLogAccepted(&info);
+	AppsCodeLicenseLogAcceptedAt(&info, info_elevel);
 
 	last_accepted = info;
 	have_last_accepted = true;
