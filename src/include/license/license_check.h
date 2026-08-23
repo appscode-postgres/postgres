@@ -76,6 +76,9 @@ extern bool AppsCodeLicenseReadShared(AppsCodeLicenseReport *out);
 /* Log the standard one-line acceptance record at LOG level. */
 extern void AppsCodeLicenseLogAccepted(const LicenseInfo *info);
 
+/* As above, at a caller-chosen elevel (DEBUG1 for single-user mode). */
+extern void AppsCodeLicenseLogAcceptedAt(const LicenseInfo *info, int elevel);
+
 /*
  * Register the runtime-expiry background worker. Called once, unconditionally,
  * from PostmasterMain (not via shared_preload_libraries).
