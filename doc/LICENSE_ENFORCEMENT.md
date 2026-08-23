@@ -421,9 +421,26 @@ Non-fatal messages:
   issuance defaults (so "SAN present but ignored" is exercised), no
   imposed serial format. Flags allow overriding `O` (for the
   missing-feature negative test), validity window (for expiry tests),
-  and EKU (for the serverAuth negative test). Verified feasible with
-  stock `openssl req` on OpenSSL 3.0.13, including the nonstandard
-  8-character `C` value and repeated `O` entries.
+  and EKU (for the serverAuth negative test).
+- The dev tooling is implemented with `python3` and the `cryptography`
+  package, not the `openssl` command-line tool, for one specific reason:
+  the production `C` value is `postgres`, 8 characters, which exceeds the
+  PKIX countryName `SIZE(2)` upper bound. The production issuer is a Go
+  program whose `crypto/x509` does not apply that bound, so the real
+  license carries an 8-character country. The `openssl` CLI enforces the
+  bound and refuses to emit such a value (verified against OpenSSL
+  3.0.13, which fails CSR creation with "string too long, maxsize=2"),
+  and so does python-cryptography's default validation; the dev tooling
+  passes `_validate=False` on the country attribute only, to mirror the
+  Go issuer. This is a property of the issuance side; the Postgres
+  verifier does not read `C` at all (section 4), so nothing in the server
+  depends on it. `python3` and `cryptography` are therefore build/test
+  dependencies of the AppsCode test suite, not runtime dependencies of
+  the server, which still needs only OpenSSL.
+- The dev CA (`scripts/make-dev-ca.sh`) uses a normal random serial. The
+  production root's serial is 0, an RFC 5280 violation that neither Go
+  nor python-cryptography will emit; since the dev CA is a distinct trust
+  anchor, its serial is irrelevant to verification.
 - CI gates:
   - Release-binary inspection fails the build if the dev CA fingerprint
     appears anywhere in the shipped binary.
