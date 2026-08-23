@@ -25,15 +25,119 @@
 
 #include "access/xlog.h"
 #include "miscadmin.h"
+#include "storage/shmem.h"
+#include "storage/spin.h"
 #include "utils/elog.h"
 
 #include "license/license.h"
 #include "license/license_check.h"
 #include "license/license_state.h"
 
-/* Most recently accepted license, for the SQL reporting function. */
+/* Most recently accepted license in this process. */
 static LicenseInfo last_accepted;
 static bool have_last_accepted = false;
+
+/*
+ * Shared-memory snapshot of the verified license, written by the postmaster
+ * (at shmem init) and the background worker (after each re-check), and read
+ * by the reporting extension. Guarded by a spinlock; the payload is small
+ * and writes are infrequent.
+ */
+typedef struct AppsCodeLicenseShared
+{
+	slock_t		mutex;
+	AppsCodeLicenseReport report;
+} AppsCodeLicenseShared;
+
+static AppsCodeLicenseShared *license_shared = NULL;
+
+/* Join the O feature list into a comma-separated string. */
+static void
+join_features(const LicenseInfo *info, char *out, size_t outlen)
+{
+	size_t		p = 0;
+	int			i;
+
+	out[0] = '\0';
+	for (i = 0; i < info->num_features && p < outlen - 1; i++)
+		p += snprintf(out + p, outlen - p, "%s%s",
+					  i ? "," : "", info->features[i]);
+}
+
+Size
+AppsCodeLicenseShmemSize(void)
+{
+	return sizeof(AppsCodeLicenseShared);
+}
+
+void
+AppsCodeLicenseShmemInit(void)
+{
+	bool		found;
+
+	license_shared = (AppsCodeLicenseShared *)
+		ShmemInitStruct("AppsCode License Snapshot",
+						AppsCodeLicenseShmemSize(), &found);
+
+	if (!found)
+	{
+		SpinLockInit(&license_shared->mutex);
+		memset(&license_shared->report, 0, sizeof(license_shared->report));
+		license_shared->report.populated = false;
+
+		/*
+		 * The postmaster verified the license before shared memory existed,
+		 * so seed the snapshot from that result now. The background worker
+		 * keeps it fresh across renewals.
+		 */
+		if (have_last_accepted)
+			AppsCodeLicensePublish(&last_accepted);
+	}
+}
+
+void
+AppsCodeLicensePublish(const LicenseInfo *info)
+{
+	AppsCodeLicenseReport rep;
+
+	if (license_shared == NULL)
+		return;
+
+	memset(&rep, 0, sizeof(rep));
+	rep.populated = true;
+	rep.verifies = (info->status == LICENSE_OK);
+	snprintf(rep.serial_dec, sizeof(rep.serial_dec), "%s", info->serial_dec);
+	snprintf(rep.cn, sizeof(rep.cn), "%s", info->cn);
+	snprintf(rep.product_line, sizeof(rep.product_line), "%s",
+			 info->product_line);
+	snprintf(rep.tier, sizeof(rep.tier), "%s", info->tier);
+	snprintf(rep.plan, sizeof(rep.plan), "%s", info->plan);
+	join_features(info, rep.features, sizeof(rep.features));
+	snprintf(rep.not_before, sizeof(rep.not_before), "%s", info->not_before);
+	snprintf(rep.not_after, sizeof(rep.not_after), "%s", info->not_after);
+	rep.days_remaining = (int64) info->days_remaining;
+	snprintf(rep.leaf_sha256, sizeof(rep.leaf_sha256), "%s", info->leaf_sha256);
+
+	SpinLockAcquire(&license_shared->mutex);
+	license_shared->report = rep;
+	SpinLockRelease(&license_shared->mutex);
+}
+
+bool
+AppsCodeLicenseReadShared(AppsCodeLicenseReport *out)
+{
+	if (license_shared == NULL)
+	{
+		memset(out, 0, sizeof(*out));
+		return false;
+	}
+
+	SpinLockAcquire(&license_shared->mutex);
+	*out = license_shared->report;
+	SpinLockRelease(&license_shared->mutex);
+
+	return out->populated;
+}
 
 /*
  * Map a verification status to a FATAL ereport. Called only for failures.

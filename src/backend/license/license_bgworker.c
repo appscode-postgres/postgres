@@ -153,6 +153,9 @@ AppsCodeLicenseWorkerMain(Datum main_arg)
 			}
 		}
 
+		/* Refresh the shared snapshot so reporting reflects renewals. */
+		AppsCodeLicensePublish(&info);
+
 		maybe_warn_expiry(&info, &last_warn_day);
 	}
 

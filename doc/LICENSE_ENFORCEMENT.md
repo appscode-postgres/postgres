@@ -515,7 +515,51 @@ CREATE TABLE license (
 No customer name, email, or organization slug column. Customer identity
 lives in AppsCode's separate customer records, joined by license serial.
 
-## 17. What this defends against, in one paragraph
+## 17. The appscode_license reporting extension
+
+`contrib/appscode_license` is an optional, read-only extension so an
+operator or support engineer can query the current license from inside the
+database, without file system or log access. It is pure reporting and is
+strictly separated from enforcement:
+
+- It reads a shared-memory snapshot of the license the local postmaster
+  already verified. It never reads, re-parses, or re-verifies the license
+  file, and has no call path into the verification routine. Corrupting or
+  deleting the license file does not change what it reports (the background
+  worker is what acts on that, by shutting the cluster down on its next
+  re-check).
+- Its presence or absence changes nothing about enforcement, which runs
+  unconditionally in the postmaster regardless of
+  `shared_preload_libraries`. `DROP EXTENSION appscode_license` has no
+  effect on server availability.
+- The snapshot is written by the postmaster when shared memory is created
+  (seeded from the startup verification) and refreshed by the background
+  worker after each 60-second re-check, so the SQL output and the log
+  never disagree, including across an in-place renewal.
+- On a streaming replica the snapshot reflects what the local node
+  verified on its own start, never anything replicated from the primary.
+
+`SELECT * FROM appscode_license_info();` returns one row:
+
+| Column | Source | Notes |
+|---|---|---|
+| `license_id` | serial | the license ID, decimal |
+| `cn` | CN | UUID-shaped issuance identifier, distinct from `license_id` |
+| `product_line` | C | informational |
+| `tier` | ST | informational |
+| `plan` | OU | informational |
+| `features` | O | `text[]`; includes `postgres-enterprise` |
+| `not_before` | notBefore | |
+| `not_after` | notAfter | |
+| `days_remaining` | derived | whole days to `not_after` |
+| `verifies` | last check | true on a running server; reported explicitly |
+| `leaf_sha256` | leaf cert | SHA-256 fingerprint |
+
+The snapshot deliberately carries no SAN email and no DNS/cluster value;
+licenses in this system are not cluster-bound (section 5), and the email
+is never surfaced (section 6). Execute is restricted to `pg_monitor`.
+
+## 18. What this defends against, in one paragraph
 
 This system makes it so that running Postgres Enterprise by AppsCode
 without a valid license, or past expiry, or with a rolled-back clock,

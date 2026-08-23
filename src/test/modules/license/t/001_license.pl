@@ -254,31 +254,65 @@ $node->append_conf('postgresql.conf', "log_min_messages = warning\n");
 	# leave running for the SQL and SAN-privacy checks below
 }
 
-# ---- appscode_license_info() and email-SAN privacy ----
+# ---- appscode_license_info() reporting extension ----
 {
 	my $has_ext = $node->safe_psql('postgres',
 		"SELECT count(*) FROM pg_available_extensions WHERE name = 'appscode_license'");
 	if ($has_ext eq '1')
 	{
 		$node->safe_psql('postgres', 'CREATE EXTENSION appscode_license');
-		my $serial = $node->safe_psql('postgres',
-			'SELECT license_id FROM appscode_license_info()');
+
+		# Serial and CN match the startup log line.
+		my ($serial, $cn) = split /\|/, $node->safe_psql('postgres',
+			'SELECT license_id, cn FROM appscode_license_info()');
 		my $log = PostgreSQL::Test::Utils::slurp_file($node->logfile);
-		my ($logged) = $log =~ /id \(serial\) (\d+)/;
-		is($serial, $logged,
+		my ($logged_serial) = $log =~ /id \(serial\) (\d+)/;
+		my ($logged_cn)     = $log =~ /CN (\S+),/;
+		is($serial, $logged_serial,
 			'appscode_license_info serial matches the startup log');
+		is($cn, $logged_cn, 'appscode_license_info CN matches the startup log');
 
 		my $feat = $node->safe_psql('postgres',
 			"SELECT 'postgres-enterprise' = ANY(features) FROM appscode_license_info()");
 		is($feat, 't', 'appscode_license_info reports the feature');
+
+		my $verifies = $node->safe_psql('postgres',
+			'SELECT verifies FROM appscode_license_info()');
+		is($verifies, 't', 'appscode_license_info reports verifies = true');
+
+		# No SAN email and no DNS/cluster value anywhere in the output.
+		my $row = $node->safe_psql('postgres',
+			'SELECT appscode_license_info()::text');
+		unlike($row, qr/example\.com/,
+			'email SAN never appears in appscode_license_info output');
+
+		# The function reads only the cached snapshot: corrupting the license
+		# file must not change what it reports, and must not re-verify.
+		my $lic = $ENV{PGLICENSE};
+		my $saved = PostgreSQL::Test::Utils::slurp_file($lic);
+		open my $fh, '>', $lic or die;
+		print $fh "GARBAGE\n";
+		close $fh;
+		my $still = $node->safe_psql('postgres',
+			'SELECT verifies FROM appscode_license_info()');
+		is($still, 't',
+			'appscode_license_info reports cached state, not the (now corrupt) file');
+		# restore before the worker re-check window
+		open $fh, '>', $lic or die;
+		print $fh $saved;
+		close $fh;
+
+		# Dropping the extension does not affect availability.
+		$node->safe_psql('postgres', 'DROP EXTENSION appscode_license');
+		is($node->safe_psql('postgres', 'SELECT 1'), '1',
+			'server still available after DROP EXTENSION');
 	}
 	else
 	{
 		ok(1, 'appscode_license extension not installed; skipping info checks');
 	}
 
-	# The default license carries an email SAN (dev\@example.com). It must
-	# never appear in the log or in the SQL output.
+	# The email SAN must never appear in the log either.
 	my $log = PostgreSQL::Test::Utils::slurp_file($node->logfile);
 	unlike($log, qr/example\.com/, 'email SAN never appears in the log');
 	$node->stop;
