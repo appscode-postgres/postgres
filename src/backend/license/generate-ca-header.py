@@ -146,14 +146,18 @@ def emit_pins_header(ders, path):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pem", required=True)
-    ap.add_argument("--der-out", required=True)
+    ap.add_argument("--der-out")
     ap.add_argument("--pins-out")
     args = ap.parse_args()
+
+    if not args.der_out and not args.pins_out:
+        ap.error("at least one of --der-out or --pins-out is required")
 
     with open(args.pem) as f:
         ders = parse_pem_certs(f.read())
 
-    emit_der_header(ders, args.der_out)
+    if args.der_out:
+        emit_der_header(ders, args.der_out)
     if args.pins_out:
         emit_pins_header(ders, args.pins_out)
 

@@ -52,6 +52,7 @@
 #include "pg_getopt.h"
 #include "pg_trace.h"
 #include "pgstat.h"
+#include "license/license_check.h"
 #include "postmaster/autovacuum.h"
 #include "postmaster/interrupt.h"
 #include "postmaster/postmaster.h"
@@ -4136,6 +4137,13 @@ PostgresSingleUserMain(int argc, char *argv[],
 
 	/* read control file (error checking and contains config ) */
 	LocalProcessControlFile(false);
+
+	/*
+	 * AppsCode license enforcement for single-user mode, which bypasses the
+	 * postmaster. Same gates as a normal server start; fatal on failure. See
+	 * src/backend/license/ and doc/LICENSE_ENFORCEMENT.md.
+	 */
+	AppsCodeLicenseCheckStartup("single-user");
 
 	/*
 	 * process any libraries that should be preloaded at postmaster start
