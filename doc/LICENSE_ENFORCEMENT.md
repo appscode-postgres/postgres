@@ -293,13 +293,23 @@ hmac=<64 hex chars>
 
 - `hmac` is HMAC-SHA256 over the exact bytes of the five preceding
   lines. The key is `SHA256("appscode-pg-license-state-v1" ||
-  DER-SHA256 of the first embedded CA certificate || the license serial
-  as a decimal string)`. Deriving the key from the embedded CA
-  fingerprint and the serial means a state file cannot be fabricated
-  without the binary's trust anchor identity, and a state file does not
-  survive a license replacement unnoticed (a new serial simply
-  regenerates state, which is harmless: the high-water mark restarts
-  from the current clock).
+  DER-SHA256 of the first embedded CA certificate || serial as a decimal
+  string)`. On write the serial is the current license's; on read the key
+  is re-derived from the serial stored in the file, so the file is
+  self-verifying regardless of which license is now in effect. This is an
+  integrity check against accidental corruption and casual edits, not a
+  secret-based MAC (the CA fingerprint is public), which is consistent
+  with the threat model: deleting or deliberately rewriting the file is
+  out of the "casual" scope, and resetting the high-water mark still
+  requires a validly signed replacement license that only AppsCode can
+  issue.
+- A license replacement carries a new serial. The old state file still
+  verifies (its key comes from its own stored serial), the serial change
+  is treated like an installation-fingerprint change (advisory, not
+  tampering), and the file is rewritten for the new serial. Only bytes
+  that were actually edited fail the integrity check. The high-water mark
+  is carried forward across replacement (`max(stored, now)`), so a
+  renewal never weakens clock-rollback protection.
 - At startup and on every worker cycle: if current wall clock is more
   than 24 hours behind `hwm`, fail with the clock-rollback error. The
   24-hour tolerance absorbs DST confusion, small NTP steps, and
