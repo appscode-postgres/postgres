@@ -25,6 +25,7 @@ include $(top_builddir)/src/Makefile.global
 
 OBJS = \
 	license.o \
+	license_bgworker.o \
 	license_check.o \
 	license_pins.o \
 	license_state.o
