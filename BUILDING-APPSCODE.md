@@ -1,10 +1,10 @@
 # Building Postgres Enterprise by AppsCode
 
-This branch (`AC_16_9`) is upstream PostgreSQL 16.9 (`REL_16_9`) plus a
+This branch (`AC_17_11`) is upstream PostgreSQL 17.11 (`REL_17_11`) plus a
 single rebrand commit that changes the product-name portion of the version
 string to **"Postgres Enterprise by AppsCode"**. The numeric version stays
-byte-for-byte identical to upstream (`server_version` = `16.9`,
-`server_version_num` = `160009`, `PG_VERSION` data-directory file = `16`),
+byte-for-byte identical to upstream (`server_version` = `17.11`,
+`server_version_num` = `170011`, `PG_VERSION` data-directory file = `17`),
 so tooling that parses `\d+\.\d+` out of any version surface keeps working.
 
 Docker packaging is **not** done in this repository. Images (Alpine and
@@ -14,20 +14,20 @@ once it exists. -->
 
 ## Branch model
 
-- Upstream tag: `REL_<MAJOR>_<MINOR>` (this branch: `REL_16_9`)
-- AppsCode branch: `AC_<MAJOR>_<MINOR>` (this branch: `AC_16_9`)
+- Upstream tag: `REL_<MAJOR>_<MINOR>` (this branch: `REL_17_11`)
+- AppsCode branch: `AC_<MAJOR>_<MINOR>` (this branch: `AC_17_11`)
 - The rebrand is exactly **one commit** on top of the upstream tag
   ("Rebrand product name to \"Postgres Enterprise by AppsCode\""), also
   exported as `0001-rebrand-to-postgres-enterprise-by-appscode.patch`.
   Keep it that way: no other changes mixed in, so each new point release
   is a mechanical cherry-pick.
 
-## New point release (e.g. 16.10)
+## New point release (e.g. 17.12)
 
 ```sh
 git fetch --tags origin
-git checkout -b AC_16_10 REL_16_10
-git cherry-pick <rebrand commit from AC_16_9>
+git checkout -b AC_17_12 REL_17_12
+git cherry-pick <rebrand commit from AC_17_11>
 ```
 
 Then rerun the regenerate/build/verify steps below. The cherry-pick will
@@ -84,19 +84,19 @@ meson test -C build-meson --suite setup --suite regress
 
 ## Verify the rebrand end to end
 
-All of these must print exactly `Postgres Enterprise by AppsCode 16.9`
+All of these must print exactly `Postgres Enterprise by AppsCode 17.11`
 as the product+version (no suffix on the number):
 
 ```sh
-bin/postgres --version      # postgres (Postgres Enterprise by AppsCode) 16.9
-bin/pg_config --version     # Postgres Enterprise by AppsCode 16.9
+bin/postgres --version      # postgres (Postgres Enterprise by AppsCode) 17.11
+bin/pg_config --version     # Postgres Enterprise by AppsCode 17.11
 bin/initdb -D data -U postgres
 bin/pg_ctl -D data -l server.log -w start
-grep starting server.log    # LOG:  starting Postgres Enterprise by AppsCode 16.9 on ...
+grep starting server.log    # LOG:  starting Postgres Enterprise by AppsCode 17.11 on ...
 bin/psql -U postgres -Atc 'SELECT version();'
-                            # Postgres Enterprise by AppsCode 16.9 on ..., compiled by ...
-bin/psql -U postgres -Atc 'SHOW server_version;'      # 16.9   (unchanged)
-bin/psql -U postgres -Atc 'SHOW server_version_num;'  # 160009 (unchanged)
+                            # Postgres Enterprise by AppsCode 17.11 on ..., compiled by ...
+bin/psql -U postgres -Atc 'SHOW server_version;'      # 17.11  (unchanged)
+bin/psql -U postgres -Atc 'SHOW server_version_num;'  # 170011 (unchanged)
 ```
 
 ## What the rebrand commit covers (and deliberately does not)
