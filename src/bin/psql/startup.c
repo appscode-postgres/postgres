@@ -843,7 +843,7 @@ process_psqlrc_file(char *filename)
 static void
 showVersion(void)
 {
-	puts("psql (Postgres Enterprise by AppsCode) " PG_VERSION);
+	puts("psql (PostgreSQL) " PG_VERSION);
 }
 
 

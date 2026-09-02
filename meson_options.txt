@@ -61,7 +61,9 @@ option('extra_include_dirs', type: 'array', value: [],
 option('extra_lib_dirs', type: 'array', value: [],
   description: 'Non-default directories to be searched for libs')
 
-option('extra_version', type: 'string', value: '',
+# AppsCode: default brand suffix, mirroring the configure.ac default.  See the
+# comment there; an explicit -Dextra_version= still overrides it.
+option('extra_version', type: 'string', value: ' - Postgres Enterprise by AppsCode',
   description: 'Append STRING to the PostgreSQL version number')
 
 option('darwin_sysroot', type: 'string', value: '',
