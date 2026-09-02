@@ -1,11 +1,20 @@
 # Building Postgres Enterprise by AppsCode
 
 This branch (`AC_16_9`) is upstream PostgreSQL 16.9 (`REL_16_9`) plus a
-single rebrand commit that changes the product-name portion of the version
-string to **"Postgres Enterprise by AppsCode"**. The numeric version stays
-byte-for-byte identical to upstream (`server_version` = `16.9`,
-`server_version_num` = `160009`, `PG_VERSION` data-directory file = `16`),
-so tooling that parses `\d+\.\d+` out of any version surface keeps working.
+single rebrand commit that appends **" - Postgres Enterprise by AppsCode"**
+to the version string, using PostgreSQL's own `--with-extra-version` hook.
+The product name stays `PostgreSQL`, so every version surface still begins
+with `PostgreSQL <numeric version>`:
+
+```
+PostgreSQL 16.9 - Postgres Enterprise by AppsCode on x86_64-pc-linux-gnu, ...
+```
+
+This is the same shape Percona (`16.15 - Percona Distribution`) and the
+Debian packages (`16.15 (Debian 16.15-1.pgdg13+2)`) use, and it is what
+third-party version parsers are written against. `PG_VERSION_NUM` /
+`server_version_num` (`160009`) and the `PG_VERSION` data-directory file
+(`16`) are byte-for-byte identical to upstream.
 
 Docker packaging is **not** done in this repository. Images (Alpine and
 Debian bases, following the layout of the official `docker-library/postgres`
@@ -16,11 +25,14 @@ once it exists. -->
 
 - Upstream tag: `REL_<MAJOR>_<MINOR>` (this branch: `REL_16_9`)
 - AppsCode branch: `AC_<MAJOR>_<MINOR>` (this branch: `AC_16_9`)
-- The rebrand is exactly **one commit** on top of the upstream tag
-  ("Rebrand product name to \"Postgres Enterprise by AppsCode\""), also
-  exported as `0001-rebrand-to-postgres-enterprise-by-appscode.patch`.
-  Keep it that way: no other changes mixed in, so each new point release
-  is a mechanical cherry-pick.
+- The rebrand is carried on top of the upstream tag by the commit
+  "Rebrand product name to \"Postgres Enterprise by AppsCode\"" plus the
+  follow-up "Brand via --with-extra-version, not the product name", which
+  together reduce to three touched files: `configure.ac`,
+  `meson_options.txt`, and the regenerated `configure`. The `configure`
+  delta against upstream is a single line, so cherry-picking onto a new
+  point release is essentially conflict-free. Keep it that way: no other
+  changes mixed into those commits.
 
 ## New point release (e.g. 16.10)
 
@@ -84,48 +96,63 @@ meson test -C build-meson --suite setup --suite regress
 
 ## Verify the rebrand end to end
 
-All of these must print exactly `Postgres Enterprise by AppsCode 16.9`
-as the product+version (no suffix on the number):
+Every surface must begin with `PostgreSQL 16.9` and carry the brand as a
+suffix:
 
 ```sh
-bin/postgres --version      # postgres (Postgres Enterprise by AppsCode) 16.9
-bin/pg_config --version     # Postgres Enterprise by AppsCode 16.9
+bin/postgres --version      # postgres (PostgreSQL) 16.9 - Postgres Enterprise by AppsCode
+bin/pg_config --version     # PostgreSQL 16.9 - Postgres Enterprise by AppsCode
 bin/initdb -D data -U postgres
 bin/pg_ctl -D data -l server.log -w start
-grep starting server.log    # LOG:  starting Postgres Enterprise by AppsCode 16.9 on ...
+grep starting server.log    # LOG:  starting PostgreSQL 16.9 - Postgres Enterprise by AppsCode on ...
 bin/psql -U postgres -Atc 'SELECT version();'
-                            # Postgres Enterprise by AppsCode 16.9 on ..., compiled by ...
-bin/psql -U postgres -Atc 'SHOW server_version;'      # 16.9   (unchanged)
+                            # PostgreSQL 16.9 - Postgres Enterprise by AppsCode on ..., compiled by ...
+bin/psql -U postgres -Atc 'SHOW server_version;'      # 16.9 - Postgres Enterprise by AppsCode
 bin/psql -U postgres -Atc 'SHOW server_version_num;'  # 160009 (unchanged)
 ```
 
+Note the `(PostgreSQL)` marker in `<binary> --version` is deliberate and
+matches Percona and Debian; the brand rides on the version number, not the
+product name.
+
 ## What the rebrand commit covers (and deliberately does not)
 
-Covered (Tier 1 — the version string as users and tooling see it):
-`AC_INIT` package name in `configure.ac` (TARNAME pinned to `postgresql`
-so install paths and pkg-config names are unchanged), the equivalent
-`PACKAGE_NAME`/`PACKAGE_STRING`/`PG_VERSION_STR` settings in `meson.build`,
-`PG_BACKEND_VERSIONSTR` in `src/include/port.h`, `pg_config --version`
-(`src/common/config_info.c`), the psql banner, and every client binary's
-`--version` marker `(PostgreSQL)` across `src/bin`, `src/fe_utils`,
-`src/interfaces`, `src/test` and `contrib`. Two version-string *parsers*
-were adapted for a product name containing spaces: pg_upgrade's
-`get_bin_version()` and `PostgreSQL::Test::Version` (the latter still
-accepts stock "PostgreSQL" so TAP tests can compare against unbranded
-binaries, and pg_upgrade still works against a stock old cluster).
+Covered: the default value of PostgreSQL's own extra-version hook, in both
+build systems — the `PGAC_ARG_REQ(with, extra-version, ...)` default in
+`configure.ac` and the `extra_version` option default in
+`meson_options.txt`. Because upstream already threads that value into
+`PG_VERSION`, everything downstream follows for free: `version()`,
+`PG_VERSION_STR` and the startup log, `pg_config --version`, the psql
+banner, every client binary's `--version`, and the `server_version` GUC.
+An explicit `--with-extra-version=` / `-Dextra_version=` still overrides
+the default, so a build can opt out or use a different suffix.
 
-Not covered (Tier 2, optional later follow-up): documentation, help/usage
-text, and translated message catalogs.
+Not covered (optional later follow-up): documentation, help/usage text,
+and translated message catalogs.
+
+### Why not change the product name
+
+An earlier revision of this fork replaced `AC_INIT`'s package name (and the
+`(PostgreSQL)` marker in ~30 client binaries) so that `version()` read
+`Postgres Enterprise by AppsCode 16.9 on ...`. That broke third-party
+version parsers, which expect the product name to be a single token
+followed by digits — postgres_exporter matches
+`^\w+ ((\d+)(\.\d+)?(\.\d+)?)` against `version()`, so `\w+` consumed
+`Postgres` and then hit `Enterprise` instead of a digit; pgpool's probe
+fails the same way. It also forced two source hacks (pg_upgrade's
+`get_bin_version()` and `PostgreSQL::Test::Version`) to cope with spaces in
+the product name, and a 35-file patch to carry onto every point release.
+Do not reintroduce it.
 
 ## Risks to keep in mind before shipping
 
-- Client stacks (drivers, monitoring agents, health checks) that
-  string-match on the literal word "PostgreSQL" — confirm the ones this
-  project actually uses parse only the numeric version. `server_version`
-  and `server_version_num` are unchanged, which is what libpq and most
-  drivers read.
+- `server_version` now carries the brand suffix (`16.9 - Postgres
+  Enterprise by AppsCode`), exactly as it does on Percona and Debian
+  builds. Anything that must have a bare number should read
+  `server_version_num` (`160009`), which is unchanged; that is what libpq
+  and most drivers already use.
 - pg_upgrade and replication tooling compare version strings between
-  clusters; pg_upgrade's parser was adjusted (see above) and should be
-  re-verified whenever it changes upstream.
+  clusters. Both parsers are now stock upstream code again, and
+  `src/bin/pg_upgrade` TAP passes.
 - Building from source means we own the security-patching cadence: track
   upstream PostgreSQL minor releases and cherry-pick/rebase promptly.
