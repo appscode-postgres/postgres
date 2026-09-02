@@ -17,7 +17,7 @@ dnl Read the Autoconf manual for details.
 dnl
 m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 
-AC_INIT([Postgres Enterprise by AppsCode], [16.15], [pgsql-bugs@lists.postgresql.org], [postgresql], [https://www.postgresql.org/])
+AC_INIT([PostgreSQL], [16.15], [pgsql-bugs@lists.postgresql.org], [], [https://www.postgresql.org/])
 
 m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
 Untested combinations of 'autoconf' and PostgreSQL versions are not
@@ -37,9 +37,16 @@ AC_DEFINE_UNQUOTED(PG_MAJORVERSION, "$PG_MAJORVERSION", [PostgreSQL major versio
 AC_DEFINE_UNQUOTED(PG_MAJORVERSION_NUM, $PG_MAJORVERSION, [PostgreSQL major version number])
 AC_DEFINE_UNQUOTED(PG_MINORVERSION_NUM, $PG_MINORVERSION, [PostgreSQL minor version number])
 
+dnl AppsCode: brand the product via the upstream extra-version hook rather
+dnl than by changing AC_INIT's PACKAGE argument.  The default below appends
+dnl " - Postgres Enterprise by AppsCode" to PG_VERSION, so version(),
+dnl server_version, pg_config --version and "<binary> --version" all keep the
+dnl leading "PostgreSQL <numeric version>" that third-party tooling parses.
+dnl PG_VERSION_NUM is computed from PACKAGE_VERSION below and is unaffected.
+dnl An explicit --with-extra-version still overrides this.
 PGAC_ARG_REQ(with, extra-version, [STRING], [append STRING to version],
              [PG_VERSION="$PACKAGE_VERSION$withval"],
-             [PG_VERSION="$PACKAGE_VERSION"])
+             [PG_VERSION="$PACKAGE_VERSION - Postgres Enterprise by AppsCode"])
 AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_VERSION", [PostgreSQL version as a string])
 
 AC_CANONICAL_HOST
@@ -2414,7 +2421,7 @@ else
 fi
 
 AC_DEFINE_UNQUOTED(PG_VERSION_STR,
-                   ["Postgres Enterprise by AppsCode $PG_VERSION on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
+                   ["PostgreSQL $PG_VERSION on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
                    [A string containing the version number, platform, and C compiler])
 
 # Supply a numeric version string for use by 3rd party add-ons
